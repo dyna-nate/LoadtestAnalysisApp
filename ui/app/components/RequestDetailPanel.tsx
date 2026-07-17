@@ -5,6 +5,7 @@ import { Select } from "@dynatrace/strato-components/forms";
 import { TimeseriesChart } from "@dynatrace/strato-components/charts";
 import type { Timeseries } from "@dynatrace/strato-components/charts";
 import { Accordion } from "@dynatrace/strato-components/content";
+import { Tabs, Tab } from "@dynatrace/strato-components/navigation";
 import { DataTable, type DataTableColumnDef } from "@dynatrace/strato-components/tables";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
@@ -72,8 +73,8 @@ function avgMs(records: RequestDetailRecord[], field: keyof RequestDetailRecord)
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
-function lookupPath(testExecution: string): string {
-  return `/lookups/perftest/neoload/${testExecution}/testsummary_responsetime_detailed`;
+function lookupPath(teUuid: string): string {
+  return `/lookups/perftest/neoload/${teUuid}/testsummary_responsetime_detailed`;
 }
 
 // ── Delta cell ────────────────────────────────────────────────────────────────
@@ -111,21 +112,21 @@ export const RequestDetailPanel: React.FC = () => {
   const [compareRecordsByTest, setCompareRecordsByTest] = useState<Map<string, RequestDetailRecord[]>>(new Map());
   const [missingTests, setMissingTests] = useState<{ id: string; query: string }[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
-  const [filterStep, setFilterStep] = useState<string | null>(null);
-  const [filterRequest, setFilterRequest] = useState<string | null>(null);
-  const [filterZone, setFilterZone] = useState<string | null>(null);
+  const [filterSteps, setFilterSteps] = useState<string[]>([]);
+  const [filterRequests, setFilterRequests] = useState<string[]>([]);
+  const [filterZones, setFilterZones] = useState<string[]>([]);
   const [activeRow, setActiveRow] = useState<string | null>(null);
 
   useEffect(() => {
-    setFilterStep(null);
-    setFilterRequest(null);
-    setFilterZone(null);
+    setFilterSteps([]);
+    setFilterRequests([]);
+    setFilterZones([]);
     setActiveRow(null);
-  }, [primaryTest?.test_execution]);
+  }, [primaryTest?.te_uuid]);
 
   // Hooks must run unconditionally — use a no-op query when there's no primary
   const primaryQuery = primaryTest
-    ? `load "${lookupPath(primaryTest.test_execution)}"`
+    ? `load "${lookupPath(primaryTest.te_uuid)}"`
     : "fetch logs | limit 0";
   const { data: primaryData, isLoading: primaryLoading } = useDql<RequestDetailRecord>(primaryQuery);
   const primaryRecords = primaryData?.records ?? [];
@@ -140,11 +141,11 @@ export const RequestDetailPanel: React.FC = () => {
     setCompareLoading(true);
     Promise.all(
       compareTests.map(t => {
-        const query = `load "${lookupPath(t.test_execution)}"`;
+        const query = `load "${lookupPath(t.te_uuid)}"`;
         return queryExecutionClient
           .queryExecute({ body: { query, requestTimeoutMilliseconds: 30000 } })
-          .then(r => ({ records: (r.result?.records ?? []) as unknown as RequestDetailRecord[], id: t.test_execution, query, missing: false }))
-          .catch(() => ({ records: [] as RequestDetailRecord[], id: t.test_execution, query, missing: true }));
+          .then(r => ({ records: (r.result?.records ?? []) as unknown as RequestDetailRecord[], id: t.te_uuid, query, missing: false }))
+          .catch(() => ({ records: [] as RequestDetailRecord[], id: t.te_uuid, query, missing: true }));
       })
     ).then(results => {
       const byTest = new Map<string, RequestDetailRecord[]>();
@@ -204,9 +205,9 @@ export const RequestDetailPanel: React.FC = () => {
   const uniqueZones = [...new Set(rows.map(r => r.zone).filter(z => z !== "—"))].sort();
 
   const filteredRows = rows.filter(r =>
-    (!filterStep    || r.na_keptn === filterStep) &&
-    (!filterRequest || r.request  === filterRequest) &&
-    (!filterZone    || r.zone     === filterZone)
+    (filterSteps.length    === 0 || filterSteps.includes(r.na_keptn)) &&
+    (filterRequests.length === 0 || filterRequests.includes(r.request)) &&
+    (filterZones.length    === 0 || filterZones.includes(r.zone))
   );
 
   const rowKey = (r: DisplayRow) => `${r.na_keptn}|||${r.request}|||${r.zone}`;
@@ -232,7 +233,7 @@ export const RequestDetailPanel: React.FC = () => {
       { start: new Date(primaryTest.test_start), record: primaryRecords.find(matchStep) ?? null },
       ...compareTests.map(ct => ({
         start: new Date(ct.test_start),
-        record: (compareRecordsByTest.get(ct.test_execution) ?? []).find(matchStep) ?? null,
+        record: (compareRecordsByTest.get(ct.te_uuid) ?? []).find(matchStep) ?? null,
       })),
     ].sort((a, b) => a.start.getTime() - b.start.getTime());
 
@@ -363,18 +364,19 @@ export const RequestDetailPanel: React.FC = () => {
   const isLoading = primaryLoading || compareLoading;
 
   return (
-    <Surface as="section" style={{ margin: "16px", padding: "16px" }}>
-      <Flex flexDirection="column" gap={12}>
-        <Flex justifyContent="space-between" alignItems="center">
-          <Heading level={4}>Request Detail</Heading>
-          {hasCompare && (
-            <span style={{ fontSize: "0.8em", color: "#8e9099" }}>
-              Delta vs {compareTests.length} comparison test{compareTests.length > 1 ? "s" : ""} —{" "}
-              <span style={{ color: COLOR_BETTER }}>green = improved</span>,{" "}
-              <span style={{ color: COLOR_WORSE }}>red = regression</span>
-            </span>
-          )}
-        </Flex>
+    <Surface as="section" style={{ margin: "16px" }}>
+      <Tabs>
+        <Tab title="Request Details Performance">
+          <Flex flexDirection="column" gap={12} style={{ padding: "16px" }}>
+            {hasCompare && (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <span style={{ fontSize: "0.8em", color: "#8e9099" }}>
+                  Delta vs {compareTests.length} comparison test{compareTests.length > 1 ? "s" : ""} —{" "}
+                  <span style={{ color: COLOR_BETTER }}>green = improved</span>,{" "}
+                  <span style={{ color: COLOR_WORSE }}>red = regression</span>
+                </span>
+              </div>
+            )}
 
         {settings.showMissingTestsNotice && missingTests.length > 0 && !compareLoading && (
           <Accordion>
@@ -408,49 +410,55 @@ export const RequestDetailPanel: React.FC = () => {
         ) : (
           <>
             <Flex gap={8} alignItems="flex-end" flexWrap="wrap">
-              <div style={{ width: "240px" }}>
-                <Select<string>
-                  value={filterStep}
-                  onChange={v => setFilterStep(v ?? null)}
+              <div style={{ width: "280px" }}>
+                <Select<string, true>
+                  multiple={true}
+                  value={filterSteps}
+                  onChange={v => setFilterSteps(v ?? [])}
                 >
                   <Select.Trigger placeholder="All test steps" width="full" />
                   <Select.Content>
+                    <Select.Filter />
                     {uniqueSteps.map(s => (
                       <Select.Option key={s} value={s}>{s}</Select.Option>
                     ))}
                   </Select.Content>
                 </Select>
               </div>
-              <div style={{ width: "240px" }}>
-                <Select<string>
-                  value={filterRequest}
-                  onChange={v => setFilterRequest(v ?? null)}
+              <div style={{ width: "280px" }}>
+                <Select<string, true>
+                  multiple={true}
+                  value={filterRequests}
+                  onChange={v => setFilterRequests(v ?? [])}
                 >
                   <Select.Trigger placeholder="All requests" width="full" />
                   <Select.Content>
+                    <Select.Filter />
                     {uniqueRequests.map(r => (
                       <Select.Option key={r} value={r}>{r}</Select.Option>
                     ))}
                   </Select.Content>
                 </Select>
               </div>
-              <div style={{ width: "180px" }}>
-                <Select<string>
-                  value={filterZone}
-                  onChange={v => setFilterZone(v ?? null)}
+              <div style={{ width: "200px" }}>
+                <Select<string, true>
+                  multiple={true}
+                  value={filterZones}
+                  onChange={v => setFilterZones(v ?? [])}
                 >
                   <Select.Trigger placeholder="All zones" width="full" />
                   <Select.Content>
+                    <Select.Filter />
                     {uniqueZones.map(z => (
                       <Select.Option key={z} value={z}>{z}</Select.Option>
                     ))}
                   </Select.Content>
                 </Select>
               </div>
-              {(filterStep || filterRequest || filterZone) && (
+              {(filterSteps.length > 0 || filterRequests.length > 0 || filterZones.length > 0) && (
                 <span
                   style={{ fontSize: "0.8em", color: "#8e9099", cursor: "pointer", whiteSpace: "nowrap" }}
-                  onClick={() => { setFilterStep(null); setFilterRequest(null); setFilterZone(null); }}
+                  onClick={() => { setFilterSteps([]); setFilterRequests([]); setFilterZones([]); }}
                 >
                   Clear filters ({filteredRows.length} / {rows.length})
                 </span>
@@ -491,7 +499,15 @@ export const RequestDetailPanel: React.FC = () => {
             )}
           </>
         )}
-      </Flex>
+          </Flex>
+        </Tab>
+
+        <Tab title="Infrastructure Performance">
+          <Flex flexDirection="column" gap={12} style={{ padding: "16px" }}>
+            <span style={{ color: "#8e9099" }}>Infrastructure performance analysis coming soon.</span>
+          </Flex>
+        </Tab>
+      </Tabs>
     </Surface>
   );
 };

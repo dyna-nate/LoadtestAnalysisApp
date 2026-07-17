@@ -50,10 +50,10 @@ export const Header = () => {
   );
 
   const compareRuns = testRuns.filter(
-    (r) => r.test_execution !== primaryTest?.test_execution
+    (r) => r.te_uuid !== primaryTest?.te_uuid
   );
 
-  const compareIds = compareTests.map((t) => t.test_execution);
+  const compareIds = compareTests.map((t) => t.te_uuid);
 
   useEffect(() => {
     if (isLoading) logger.debug("Loading test executions from lookup table...");
@@ -100,11 +100,11 @@ export const Header = () => {
   };
 
   const handlePrimaryChange = (value: string | null | undefined) => {
-    const found = allRecords.find((r) => r.test_execution === value) ?? null;
+    const found = allRecords.find((r) => r.te_uuid === value) ?? null;
     logger.debug("Primary test selected", found);
     setPrimaryTest(found);
     if (found) {
-      setCompareTests(compareTests.filter((t) => t.test_execution !== found.test_execution));
+      setCompareTests(compareTests.filter((t) => t.te_uuid !== found.te_uuid));
     }
     if (found && !selectedScenario && found.te_scenarioname) {
       setSelectedScenario(found.te_scenarioname);
@@ -116,7 +116,7 @@ export const Header = () => {
 
   const handleCompareChange = (values: string[] | null | undefined) => {
     const ids = values ?? [];
-    const found = allRecords.filter((r) => ids.includes(r.test_execution));
+    const found = allRecords.filter((r) => ids.includes(r.te_uuid));
     logger.debug("Compare tests selected", found);
     setCompareTests(found);
   };
@@ -179,14 +179,14 @@ export const Header = () => {
               </div>
               <div style={{ width: "280px" }}>
                 <Select<string>
-                  value={primaryTest?.test_execution ?? null}
+                  value={primaryTest?.te_uuid ?? null}
                   onChange={handlePrimaryChange}
                   disabled={isLoading || !selectedScenario}
                 >
                   <Select.Trigger placeholder="Primary test..." width="full" />
                   <Select.Content>
                     {testRuns.map((t) => (
-                      <Select.Option key={t.test_execution} value={t.test_execution}>
+                      <Select.Option key={t.te_uuid} value={t.te_uuid}>
                         {formatRunLabel(t)}
                       </Select.Option>
                     ))}
@@ -203,7 +203,7 @@ export const Header = () => {
                   <Select.Trigger placeholder="Compare against..." width="full" />
                   <Select.Content>
                     {compareRuns.map((t) => (
-                      <Select.Option key={t.test_execution} value={t.test_execution}>
+                      <Select.Option key={t.te_uuid} value={t.te_uuid}>
                         {formatRunLabel(t)}
                       </Select.Option>
                     ))}

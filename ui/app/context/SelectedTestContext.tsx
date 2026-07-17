@@ -6,7 +6,7 @@ export interface TestExecution {
   test_start: string;
   test_end: string;
   test_duration_ms?: number;
-  te_uuid?: string;
+  te_uuid: string;
   te_projectname?: string;
   te_scenarioname?: string;
   avg_dur_ms?: number;
