@@ -73,8 +73,8 @@ function avgMs(records: RequestDetailRecord[], field: keyof RequestDetailRecord)
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
-function lookupPath(teUuid: string): string {
-  return `/lookups/perftest/neoload/${teUuid}/testsummary_responsetime_detailed`;
+function bizeventsQuery(teUuid: string): string {
+  return `fetch bizevents, from: -365d | filter event.type == "neoload.responsetime.detailed" | filter te_uuid == "${teUuid}"`;
 }
 
 // ── Delta cell ────────────────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ export const RequestDetailPanel: React.FC = () => {
 
   // Hooks must run unconditionally — use a no-op query when there's no primary
   const primaryQuery = primaryTest
-    ? `load "${lookupPath(primaryTest.te_uuid)}"`
+    ? bizeventsQuery(primaryTest.te_uuid)
     : "fetch logs | limit 0";
   const { data: primaryData, isLoading: primaryLoading } = useDql<RequestDetailRecord>(primaryQuery);
   const primaryRecords = primaryData?.records ?? [];
@@ -141,7 +141,7 @@ export const RequestDetailPanel: React.FC = () => {
     setCompareLoading(true);
     Promise.all(
       compareTests.map(t => {
-        const query = `load "${lookupPath(t.te_uuid)}"`;
+        const query = bizeventsQuery(t.te_uuid);
         return queryExecutionClient
           .queryExecute({ body: { query, requestTimeoutMilliseconds: 30000 } })
           .then(r => ({ records: (r.result?.records ?? []) as unknown as RequestDetailRecord[], id: t.te_uuid, query, missing: false }))
@@ -387,7 +387,7 @@ export const RequestDetailPanel: React.FC = () => {
               <Accordion.SectionContent>
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "0.8em" }}>
                   <span style={{ color: "#8e9099", marginBottom: "4px" }}>
-                    No request detail data for these comparison tests — run the workflow to populate their lookup tables:
+                    No request detail data for these comparison tests — run the workflow to ingest their performance business events:
                   </span>
                   {missingTests.map(t => (
                     <div key={t.id} style={{ fontFamily: "monospace", background: "rgba(255,255,255,0.05)", borderRadius: "4px", padding: "6px 10px" }}>
@@ -405,7 +405,7 @@ export const RequestDetailPanel: React.FC = () => {
           <span style={{ color: "#8e9099" }}>Loading request details…</span>
         ) : rows.length === 0 ? (
           <span style={{ color: "#8e9099" }}>
-            No request detail data for this test execution. Run the <strong>upsertRequestDurations</strong> workflow action to populate the lookup tables.
+            No request detail data for this test execution. Run the workflow to ingest performance business events for this test.
           </span>
         ) : (
           <>

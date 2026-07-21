@@ -78,8 +78,8 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({ open, onClose }) =
             <Flex flexDirection="column" gap={4} style={{ flex: 1 }}>
               <Text>Show missing lookup table notices</Text>
               <Text textStyle="small" color="var(--dt-color-text-subdued, #8e9099)">
-                Display a notice for comparison tests that do not have a
-                testsummary_responsetime_detailed lookup table. Disable once
+                Display a notice for comparison tests that have no
+                neoload.responsetime.detailed business events. Disable once
                 you know which executions are missing data.
               </Text>
             </Flex>
