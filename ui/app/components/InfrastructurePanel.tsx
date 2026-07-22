@@ -105,9 +105,9 @@ function avgMetricsList(list: EntityMetrics[]): EntityMetrics {
   };
 }
 
-// Normalize timeseries datapoints to elapsed milliseconds from test_start.
-// Charts are then displayed with x-axis representing "time into test".
-function toNormalizedSeries(
+// Convert timeseries record array field to absolute-time datapoints.
+// testStart is used as a fallback origin when the record timeframe is missing.
+function toAbsoluteSeries(
   record: Record<string, unknown>,
   field: string,
   multiplier: number,
@@ -115,13 +115,14 @@ function toNormalizedSeries(
 ): { start: Date; value: number }[] {
   const arr = record[field] as (number | null)[] | undefined;
   if (!arr) return [];
-  const testStartMs = new Date(testStart).getTime();
   const timeframe = record["timeframe"] as { start?: string } | undefined;
-  const recStart = timeframe?.start ? new Date(timeframe.start).getTime() : testStartMs;
+  const recStart = timeframe?.start
+    ? new Date(timeframe.start).getTime()
+    : new Date(testStart).getTime();
   const intervalMs = Number(record["interval"]) / 1_000_000; // ns → ms
   return arr
     .map((v, i) =>
-      v != null ? { start: new Date(recStart + i * intervalMs - testStartMs), value: v * multiplier } : null
+      v != null ? { start: new Date(recStart + i * intervalMs), value: v * multiplier } : null
     )
     .filter((p): p is { start: Date; value: number } => p != null);
 }
@@ -360,7 +361,7 @@ export const InfrastructurePanel: React.FC = () => {
         return (["p50", "p90", "p99"] as const).map((p) => ({
           name: `${labelFor(test, i)} – ${p.toUpperCase()}`,
           unit: "ms",
-          datapoints: toNormalizedSeries(rec, p, US_TO_MS, test.test_start),
+          datapoints: toAbsoluteSeries(rec, p, US_TO_MS, test.test_start),
         })).filter((s) => s.datapoints.length > 0);
       })
     ).then((all) => {
@@ -591,7 +592,8 @@ export const InfrastructurePanel: React.FC = () => {
                   </span>
                 </Heading>
                 <Text textStyle="small" style={{ color: "#8e9099" }}>
-                  X-axis = elapsed time since test start. Comparison tests aligned for direct comparison.
+                  Showing absolute timestamps for each test window ({new Date(activeRow.test_start).toLocaleString()} – {new Date(activeRow.test_end).toLocaleString()}).
+                  Comparison tests show their own time windows.
                 </Text>
                 {detailLoading && <Text style={{ color: "#8e9099" }}>Loading metrics…</Text>}
                 {!detailLoading && detailSeries.length > 0 && (
