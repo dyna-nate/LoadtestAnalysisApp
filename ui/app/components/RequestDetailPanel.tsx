@@ -11,6 +11,7 @@ import { useDql } from "@dynatrace-sdk/react-hooks";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { useSelectedTest } from "../context/SelectedTestContext";
 import { useSettings } from "../context/SettingsContext";
+import { InfrastructurePanel } from "./InfrastructurePanel";
 
 const COLOR_BETTER = "#00b140";
 const COLOR_WORSE  = "#e8323e";
@@ -503,9 +504,7 @@ export const RequestDetailPanel: React.FC = () => {
         </Tab>
 
         <Tab title="Infrastructure Performance">
-          <Flex flexDirection="column" gap={12} style={{ padding: "16px" }}>
-            <span style={{ color: "#8e9099" }}>Infrastructure performance analysis coming soon.</span>
-          </Flex>
+          <InfrastructurePanel />
         </Tab>
       </Tabs>
     </Surface>
