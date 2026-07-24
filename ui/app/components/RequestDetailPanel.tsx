@@ -11,6 +11,7 @@ import { useDql } from "@dynatrace-sdk/react-hooks";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { useSelectedTest } from "../context/SelectedTestContext";
 import { useSettings } from "../context/SettingsContext";
+import { isWorse, type MetricThreshold } from "../utils/thresholds";
 import { InfrastructurePanel } from "./InfrastructurePanel";
 
 const COLOR_BETTER = "#00b140";
@@ -80,24 +81,20 @@ function bizeventsQuery(teUuid: string): string {
 
 // ── Delta cell ────────────────────────────────────────────────────────────────
 
-const DeltaCell: React.FC<{ primaryMs: number | null; compareAvgMs: number | null }> = ({
+const DeltaCell: React.FC<{ primaryMs: number | null; compareAvgMs: number | null; threshold: MetricThreshold }> = ({
   primaryMs,
   compareAvgMs,
+  threshold,
 }) => {
   if (primaryMs == null) return <span>—</span>;
   const delta = compareAvgMs != null ? primaryMs - compareAvgMs : null;
+  const worse = isWorse(primaryMs, compareAvgMs, true, threshold);
+  const deltaColor = delta != null ? (worse ? COLOR_WORSE : delta < 0 ? COLOR_BETTER : undefined) : undefined;
   return (
     <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
       <span style={{ whiteSpace: "nowrap" }}>{primaryMs.toFixed(2)} ms</span>
       {delta != null && (
-        <span
-          style={{
-            fontSize: "0.75em",
-            fontWeight: "bold",
-            whiteSpace: "nowrap",
-            color: delta <= 0 ? COLOR_BETTER : COLOR_WORSE,
-          }}
-        >
+        <span style={{ fontSize: "0.75em", fontWeight: "bold", whiteSpace: "nowrap", color: deltaColor }}>
           {delta >= 0 ? "+" : ""}{delta.toFixed(1)}
         </span>
       )}
@@ -110,6 +107,7 @@ const DeltaCell: React.FC<{ primaryMs: number | null; compareAvgMs: number | nul
 export const RequestDetailPanel: React.FC = () => {
   const { primaryTest, compareTests } = useSelectedTest();
   const { settings } = useSettings();
+  const { thresholds } = settings;
   const [compareRecordsByTest, setCompareRecordsByTest] = useState<Map<string, RequestDetailRecord[]>>(new Map());
   const [missingTests, setMissingTests] = useState<{ id: string; query: string }[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
@@ -264,10 +262,11 @@ export const RequestDetailPanel: React.FC = () => {
       width: "content",
       cell: ({ value, rowData }) => (
         <div style={{ paddingLeft: "12px", paddingRight: "12px" }}>
-        <DeltaCell
-          primaryMs={value as number | null}
-          compareAvgMs={hasCompare ? (rowData[cmpField] as number | null) : null}
-        />
+          <DeltaCell
+            primaryMs={value as number | null}
+            compareAvgMs={hasCompare ? (rowData[cmpField] as number | null) : null}
+            threshold={thresholds.responseTime}
+          />
         </div>
       ),
     };
@@ -312,11 +311,13 @@ export const RequestDetailPanel: React.FC = () => {
         const primary = value as number | null;
         const compare = hasCompare ? rowData.cmp_count : null;
         const delta = primary != null && compare != null ? primary - compare : null;
+        const worse = isWorse(primary, compare, false, thresholds.requestCount);
+        const better = primary != null && compare != null && primary > compare;
         return (
           <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
             <span style={{ whiteSpace: "nowrap" }}>{primary ?? "—"}</span>
             {delta != null && (
-              <span style={{ fontSize: "0.75em", fontWeight: "bold", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: "0.75em", fontWeight: "bold", whiteSpace: "nowrap", color: worse ? COLOR_WORSE : better ? COLOR_BETTER : undefined }}>
                 {delta >= 0 ? "+" : ""}{Math.round(delta)}
               </span>
             )}
@@ -352,7 +353,7 @@ export const RequestDetailPanel: React.FC = () => {
         METRIC_PAIRS.some(([val, cmp]) => {
           const v = row[val] as number | null;
           const c = row[cmp] as number | null;
-          return v != null && c != null && v > c;
+          return isWorse(v, c, true, thresholds.responseTime);
         }),
       type: "highlight" as const,
       backgroundColor: "rgba(232, 50, 62, 0.08)",

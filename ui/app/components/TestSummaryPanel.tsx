@@ -4,6 +4,8 @@ import { Heading } from "@dynatrace/strato-components/typography";
 import { Accordion } from "@dynatrace/strato-components/content";
 import { DataTable, type DataTableColumnDef } from "@dynatrace/strato-components/tables";
 import { type TestExecution, useSelectedTest } from "../context/SelectedTestContext";
+import { useSettings } from "../context/SettingsContext";
+import { isWorse } from "../utils/thresholds";
 
 const COLOR_BETTER = "#00b140";
 const COLOR_WORSE  = "#e8323e";
@@ -181,6 +183,7 @@ const COMPARE_COLUMNS: DataTableColumnDef<TestExecution>[] = [
 
 export const TestSummaryPanel = () => {
   const { primaryTest, compareTests } = useSelectedTest();
+  const { settings } = useSettings();
   if (!primaryTest) return null;
 
   const hasCompare = compareTests.length > 0;
@@ -233,13 +236,17 @@ export const TestSummaryPanel = () => {
               ? avgOf(compareTests.map((t) => nsToMs(t[field] as number | undefined)))
               : null;
             const delta = valueMs != null && avgCompareMs != null ? valueMs - avgCompareMs : null;
+            const worse = isWorse(valueMs, avgCompareMs, true, settings.thresholds.responseTime);
+            const deltaColor = delta != null
+              ? (worse ? COLOR_WORSE : delta < 0 ? COLOR_BETTER : undefined)
+              : undefined;
             return (
               <FieldCard
                 key={field}
                 label={label}
                 value={valueMs != null ? `${valueMs.toFixed(2)} ms` : "—"}
                 delta={delta != null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} ms` : null}
-                deltaColor={delta != null ? (delta <= 0 ? COLOR_BETTER : COLOR_WORSE) : undefined}
+                deltaColor={deltaColor}
               />
             );
           })}

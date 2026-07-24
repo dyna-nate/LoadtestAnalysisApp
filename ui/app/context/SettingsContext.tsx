@@ -1,17 +1,56 @@
 import React, { createContext, useContext, useState } from "react";
+import { type ThresholdConfig, type MetricCategory, type MetricThreshold, DEFAULT_THRESHOLDS, DEFAULT_TECH_THRESHOLDS } from "../utils/thresholds";
 
 const STORAGE_KEY = "dt-neoload:settings";
 
 interface AppSettings {
   showMissingTestsNotice: boolean;
+  thresholds: ThresholdConfig;
+  techThresholds: Record<string, MetricThreshold>;
+}
+
+function mergeThresholds(stored: unknown): ThresholdConfig {
+  if (!stored || typeof stored !== 'object') return { ...DEFAULT_THRESHOLDS };
+  const result = { ...DEFAULT_THRESHOLDS };
+  for (const key of Object.keys(DEFAULT_THRESHOLDS) as MetricCategory[]) {
+    const storedKey = (stored as Record<string, unknown>)[key];
+    if (storedKey && typeof storedKey === 'object') {
+      result[key] = { ...DEFAULT_THRESHOLDS[key], ...(storedKey as Partial<MetricThreshold>) };
+    }
+  }
+  return result;
+}
+
+function mergeTechThresholds(stored: unknown): Record<string, MetricThreshold> {
+  const result = { ...DEFAULT_TECH_THRESHOLDS };
+  if (!stored || typeof stored !== 'object') return result;
+  for (const key of Object.keys(DEFAULT_TECH_THRESHOLDS)) {
+    const storedKey = (stored as Record<string, unknown>)[key];
+    if (storedKey && typeof storedKey === 'object') {
+      result[key] = { ...DEFAULT_TECH_THRESHOLDS[key], ...(storedKey as Partial<MetricThreshold>) };
+    }
+  }
+  return result;
 }
 
 function loadSettings(): AppSettings {
+  const defaults: AppSettings = {
+    showMissingTestsNotice: true,
+    thresholds: { ...DEFAULT_THRESHOLDS },
+    techThresholds: { ...DEFAULT_TECH_THRESHOLDS },
+  };
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return { showMissingTestsNotice: true, ...JSON.parse(stored) };
+    if (!stored) return defaults;
+    const parsed = JSON.parse(stored);
+    return {
+      ...defaults,
+      ...parsed,
+      thresholds:     mergeThresholds(parsed.thresholds),
+      techThresholds: mergeTechThresholds(parsed.techThresholds),
+    };
   } catch {}
-  return { showMissingTestsNotice: true };
+  return defaults;
 }
 
 function saveSettings(settings: AppSettings): void {
@@ -26,7 +65,7 @@ interface SettingsContextValue {
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
-  settings: { showMissingTestsNotice: true },
+  settings: { showMissingTestsNotice: true, thresholds: { ...DEFAULT_THRESHOLDS }, techThresholds: { ...DEFAULT_TECH_THRESHOLDS } },
   updateSettings: () => {},
 });
 
