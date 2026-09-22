@@ -8,11 +8,17 @@ import { TestSummaryPanel } from "./components/TestSummaryPanel";
 import { RequestDetailPanel } from "./components/RequestDetailPanel";
 import { SelectedTestProvider } from "./context/SelectedTestContext";
 import { SettingsProvider } from "./context/SettingsContext";
+import { FilterProvider } from "./context/FilterContext";
+import { SloProvider } from "./context/SloContext";
+import { AccessProvider } from "./context/AccessContext";
 
 export const App = () => {
   return (
     <SettingsProvider>
+    <AccessProvider>
+    <SloProvider>
     <SelectedTestProvider>
+    <FilterProvider>
       <Page>
         <Page.Header>
           <Header />
@@ -26,7 +32,10 @@ export const App = () => {
           </Routes>
         </Page.Main>
       </Page>
+    </FilterProvider>
     </SelectedTestProvider>
+    </SloProvider>
+    </AccessProvider>
     </SettingsProvider>
   );
 };

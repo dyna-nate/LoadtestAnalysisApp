@@ -5,6 +5,7 @@ const STORAGE_KEY = "dt-neoload:settings";
 
 interface AppSettings {
   showMissingTestsNotice: boolean;
+  benchmarkScenarioFilter: boolean;
   thresholds: ThresholdConfig;
   techThresholds: Record<string, MetricThreshold>;
 }
@@ -36,6 +37,7 @@ function mergeTechThresholds(stored: unknown): Record<string, MetricThreshold> {
 function loadSettings(): AppSettings {
   const defaults: AppSettings = {
     showMissingTestsNotice: true,
+    benchmarkScenarioFilter: false,
     thresholds: { ...DEFAULT_THRESHOLDS },
     techThresholds: { ...DEFAULT_TECH_THRESHOLDS },
   };
@@ -65,7 +67,7 @@ interface SettingsContextValue {
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
-  settings: { showMissingTestsNotice: true, thresholds: { ...DEFAULT_THRESHOLDS }, techThresholds: { ...DEFAULT_TECH_THRESHOLDS } },
+  settings: { showMissingTestsNotice: true, benchmarkScenarioFilter: false, thresholds: { ...DEFAULT_THRESHOLDS }, techThresholds: { ...DEFAULT_TECH_THRESHOLDS } },
   updateSettings: () => {},
 });
 

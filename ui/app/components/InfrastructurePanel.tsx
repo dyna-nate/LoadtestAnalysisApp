@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Flex, Surface } from "@dynatrace/strato-components/layouts";
 import { Heading, Text } from "@dynatrace/strato-components/typography";
 import { Select, Switch } from "@dynatrace/strato-components/forms";
@@ -11,7 +11,9 @@ import { useSelectedTest } from "../context/SelectedTestContext";
 import type { TestExecution } from "../context/SelectedTestContext";
 import { getTechMetrics, ALL_UNIQUE_TECH_DEFS, SIGNAL_ORDER, SIGNAL_LABELS, type TechMetricDef, type SignalType } from "../utils/infraMetricConfig";
 import { useSettings } from "../context/SettingsContext";
+import { useFilters } from "../context/FilterContext";
 import { isWorse, type MetricThreshold } from "../utils/thresholds";
+import { normalizeNaKeptn } from "../utils/sloData";
 
 const COLOR_WORSE  = "#e8323e";
 const US_TO_MS     = 0.001; // dt.service.request.response_time is in microseconds
@@ -27,17 +29,21 @@ interface ServiceEntity {
 
 interface ServicesBizEvent {
   te_uuid: string;
-  na_keptn: string;
-  request?: string;
+  transaction_name: string;
+  script_name?: string;
+  page_context?: string;
   zone?: string;
   test_start: string;
   test_end: string;
   services: string; // JSON string of ServiceEntity[]
+  service_id?: string; // top-level convenience field, not used directly
+  row_key?: string;    // dedup key, not displayed
 }
 
 interface ParsedEntity extends ServiceEntity {
-  na_keptn: string;
-  request: string;
+  transaction_name: string;
+  script_name: string;
+  page_context: string;
   zone: string;
   test_start: string;
   test_end: string;
@@ -60,8 +66,9 @@ interface GroupedEntity {
   process_ids: string[];
   process_exe: string;
   tech_type: string;
-  na_keptn: string;
-  request: string;
+  transaction_name: string;
+  script_name: string;
+  page_context: string;
   zone: string;
   test_start: string;
   test_end: string;
@@ -243,15 +250,83 @@ const DeltaCell: React.FC<{
   );
 };
 
+// ── Column picker ─────────────────────────────────────────────────────────────
+
+interface ColPickerDef { id: string; label: string; locked?: boolean; }
+
+function ColumnPicker({ defs, hidden, onChange }: { defs: ColPickerDef[]; hidden: Set<string>; onChange: (v: Set<string>) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const toggleable = defs.filter(d => !d.locked);
+  const hiddenCount = toggleable.filter(d => hidden.has(d.id)).length;
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button onClick={() => setOpen(v => !v)} style={{
+        background: open ? "rgba(110,145,230,0.15)" : "rgba(255,255,255,0.05)",
+        border: `1px solid ${hiddenCount > 0 ? "rgba(110,145,230,0.5)" : "rgba(255,255,255,0.15)"}`,
+        borderRadius: "4px", color: hiddenCount > 0 ? "#6e91e6" : "#8e9099",
+        fontSize: "0.78em", padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap",
+      }}>
+        Columns{hiddenCount > 0 ? ` (${toggleable.length - hiddenCount}/${toggleable.length})` : ""} ▾
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 200,
+          background: "#1a1d24", border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: "6px", padding: "6px 0", minWidth: "180px",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.5)", maxHeight: "340px", overflowY: "auto",
+        }}>
+          {defs.map(def => {
+            const checked = !!def.locked || !hidden.has(def.id);
+            return (
+              <label key={def.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 12px", cursor: def.locked ? "default" : "pointer", opacity: def.locked ? 0.4 : 1 }}>
+                <input type="checkbox" checked={checked} disabled={!!def.locked}
+                  onChange={e => { const n = new Set(hidden); e.target.checked ? n.delete(def.id) : n.add(def.id); onChange(n); }}
+                  style={{ margin: 0 }} />
+                <span style={{ fontSize: "0.84em", color: "#c8ccd4", userSelect: "none" }}>{def.label}</span>
+              </label>
+            );
+          })}
+          {hiddenCount > 0 && (
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", margin: "4px 0 0", padding: "5px 12px 3px" }}>
+              <button onClick={() => onChange(new Set())}
+                style={{ background: "none", border: "none", color: "#6e91e6", fontSize: "0.75em", cursor: "pointer", padding: 0 }}>
+                Show all
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const INFRA_BASE_COL_DEFS: ColPickerDef[] = [
+  { id: "entity",     label: "Service / Process", locked: true },
+  { id: "tech_type",  label: "Tech" },
+  { id: "avg_rt",     label: "Avg RT" },
+  { id: "p90_rt",     label: "P90 RT" },
+  { id: "cpu",        label: "CPU %" },
+  { id: "requests",   label: "Requests" },
+  { id: "errors",     label: "Errors" },
+  { id: "error_rate", label: "Err %" },
+  { id: "memory",     label: "Memory" },
+];
+const INFRA_HIDDEN_KEY = "dt-neoload:hidden-cols:infra";
+
 // ── Panel ─────────────────────────────────────────────────────────────────────
 
 export const InfrastructurePanel: React.FC = () => {
   const { primaryTest, compareTests } = useSelectedTest();
   const { settings } = useSettings();
 
-  const [filterStep,    setFilterStep]    = useState<string | null>(null);
-  const [filterRequest, setFilterRequest] = useState<string | null>(null);
-  const [filterZone,    setFilterZone]    = useState<string | null>(null);
+  const { filterSteps, filterRequests, filterScripts, filterZones, setFilterSteps, setFilterRequests, setFilterScripts, setFilterZones, clearFilters } = useFilters();
   const [activeKey,      setActiveKey]      = useState<string | null>(null);
   const [detailCharts,   setDetailCharts]   = useState<ChartPanel[]>([]);
   const [detailLoading,  setDetailLoading]  = useState(false);
@@ -261,12 +336,17 @@ export const InfrastructurePanel: React.FC = () => {
   const [hiddenLabels,  setHiddenLabels]  = useState<Set<string>>(new Set());
   const [metricsMap,    setMetricsMap]    = useState<Map<string, EntityMetrics>>(new Map());
   const [metricsLoading, setMetricsLoading] = useState(false);
+  const [hiddenCols, setHiddenColsState] = useState<Set<string>>(() => {
+    try { const s = localStorage.getItem(INFRA_HIDDEN_KEY); if (s) return new Set(JSON.parse(s) as string[]); } catch {}
+    return new Set<string>();
+  });
+  const setHiddenCols = (next: Set<string>) => {
+    setHiddenColsState(next);
+    try { localStorage.setItem(INFRA_HIDDEN_KEY, JSON.stringify([...next])); } catch {}
+  };
 
-  // Reset on primary test change
+  // Reset panel-local state on primary test change (filter state is reset by FilterContext)
   useEffect(() => {
-    setFilterStep(null);
-    setFilterRequest(null);
-    setFilterZone(null);
     setActiveKey(null);
     setMetricsMap(new Map());
     setDetailCharts([]);
@@ -287,18 +367,30 @@ export const InfrastructurePanel: React.FC = () => {
     return primaryServicesData.records.flatMap((rec) =>
       parseServicesJson(rec.services).map((svc) => ({
         ...svc,
-        na_keptn:   rec.na_keptn,
-        request:    rec.request ?? "—",
-        zone:       rec.zone    ?? "—",
-        test_start: rec.test_start,
-        test_end:   rec.test_end,
+        transaction_name: rec.transaction_name,
+        script_name:      rec.script_name  ?? "",
+        page_context:     rec.page_context ?? "—",
+        zone:             rec.zone         ?? "—",
+        test_start:       rec.test_start,
+        test_end:         rec.test_end,
       }))
     );
   }, [primaryServicesData]);
 
   // Filter options
-  const uniqueSteps    = useMemo(() => [...new Set(allParsedEntities.map((e) => e.na_keptn))].sort(), [allParsedEntities]);
-  const uniqueRequests = useMemo(() => [...new Set(allParsedEntities.map((e) => e.request).filter((r) => r !== "—"))].sort(), [allParsedEntities]);
+  const uniqueSteps    = useMemo(() => [...new Set(allParsedEntities.map((e) => e.transaction_name))].sort(), [allParsedEntities]);
+  const uniqueRequests = useMemo(() => [...new Set(
+    allParsedEntities
+      .filter((e) => filterSteps.length === 0 || filterSteps.includes(e.transaction_name))
+      .map((e) => e.page_context)
+      .filter((r) => r !== "—")
+  )].sort(), [allParsedEntities, filterSteps]);
+  const uniqueScripts  = useMemo(() => [...new Set(
+    allParsedEntities
+      .filter((e) => filterSteps.length === 0 || filterSteps.includes(e.transaction_name))
+      .map((e) => e.script_name)
+      .filter((s) => s !== "")
+  )].sort(), [allParsedEntities, filterSteps]);
   const uniqueZones    = useMemo(() => [...new Set(allParsedEntities.map((e) => e.zone).filter((z) => z !== "—"))].sort(), [allParsedEntities]);
 
   // Resolve service display names via DQL
@@ -345,9 +437,10 @@ export const InfrastructurePanel: React.FC = () => {
   const filteredEntities = useMemo<GroupedEntity[]>(() => {
     const filtered = allParsedEntities.filter(
       (e) =>
-        (!filterStep    || e.na_keptn === filterStep) &&
-        (!filterRequest || e.request  === filterRequest) &&
-        (!filterZone    || e.zone     === filterZone)
+        (filterSteps.length    === 0 || filterSteps.includes(e.transaction_name)) &&
+        (filterRequests.length === 0 || filterRequests.includes(e.page_context)) &&
+        (filterScripts.length  === 0 || filterScripts.includes(e.script_name)) &&
+        (filterZones.length    === 0 || filterZones.includes(e.zone))
     );
     const grouped = new Map<string, GroupedEntity>();
     for (const e of filtered) {
@@ -358,21 +451,22 @@ export const InfrastructurePanel: React.FC = () => {
         }
       } else {
         grouped.set(e.service_id, {
-          entityKey:   e.service_id,
-          service_id:  e.service_id,
-          process_ids: [e.process_id_classic],
-          process_exe: e.process_exe,
-          tech_type:   e.tech_type,
-          na_keptn:    e.na_keptn,
-          request:     e.request,
-          zone:        e.zone,
-          test_start:  e.test_start,
-          test_end:    e.test_end,
+          entityKey:        e.service_id,
+          service_id:       e.service_id,
+          process_ids:      [e.process_id_classic],
+          process_exe:      e.process_exe,
+          tech_type:        e.tech_type,
+          transaction_name: e.transaction_name,
+          script_name:      e.script_name,
+          page_context:     e.page_context,
+          zone:             e.zone,
+          test_start:       e.test_start,
+          test_end:         e.test_end,
         });
       }
     }
     return [...grouped.values()];
-  }, [allParsedEntities, filterStep, filterRequest, filterZone]);
+  }, [allParsedEntities, filterSteps, filterRequests, filterZones]);
 
   // Load scalar metrics for all tests when filteredEntities / tests change
   useEffect(() => {
@@ -752,6 +846,7 @@ export const InfrastructurePanel: React.FC = () => {
       header: "",
       accessor: "entityKey",
       width: "content",
+      disableSorting: true,
       cell: ({ value }) => (
         <button
           onClick={() => setActiveKey(activeKey === value ? null : value as string)}
@@ -807,6 +902,8 @@ export const InfrastructurePanel: React.FC = () => {
       accessor: "primary",
       width: "content",
       minWidth: 100,
+      sortType: 'number',
+      sortAccessor: (row: InfraRow) => row.primary.avgRtMs,
       cell: ({ rowData }) => (
         <div style={{ padding: "0 12px" }}>
           <DeltaCell primary={rowData.primary.avgRtMs} compare={hasCompare ? rowData.compareAvg.avgRtMs : null} fmt={fmtMs} threshold={settings.thresholds.responseTime} />
@@ -819,6 +916,8 @@ export const InfrastructurePanel: React.FC = () => {
       accessor: "primary",
       width: "content",
       minWidth: 100,
+      sortType: 'number',
+      sortAccessor: (row: InfraRow) => row.primary.p90RtMs,
       cell: ({ rowData }) => (
         <div style={{ padding: "0 12px" }}>
           <DeltaCell primary={rowData.primary.p90RtMs} compare={hasCompare ? rowData.compareAvg.p90RtMs : null} fmt={fmtMs} threshold={settings.thresholds.responseTime} />
@@ -831,6 +930,8 @@ export const InfrastructurePanel: React.FC = () => {
       accessor: "primary",
       width: "content",
       minWidth: 90,
+      sortType: 'number',
+      sortAccessor: (row: InfraRow) => row.primary.cpuPct,
       cell: ({ rowData }) => (
         <div style={{ padding: "0 12px" }}>
           <DeltaCell primary={rowData.primary.cpuPct} compare={hasCompare ? rowData.compareAvg.cpuPct : null} fmt={fmtPct} threshold={settings.thresholds.cpu} />
@@ -843,6 +944,8 @@ export const InfrastructurePanel: React.FC = () => {
       accessor: "primary",
       width: "content",
       minWidth: 100,
+      sortType: 'number',
+      sortAccessor: (row: InfraRow) => row.primary.requestCount,
       cell: ({ rowData }) => (
         <div style={{ padding: "0 12px" }}>
           <DeltaCell primary={rowData.primary.requestCount} compare={hasCompare ? rowData.compareAvg.requestCount : null} fmt={fmtCount} betterIsLower={false} threshold={settings.thresholds.requestCount} />
@@ -855,6 +958,8 @@ export const InfrastructurePanel: React.FC = () => {
       accessor: "primary",
       width: "content",
       minWidth: 90,
+      sortType: 'number',
+      sortAccessor: (row: InfraRow) => row.primary.errorCount,
       cell: ({ rowData }) => (
         <div style={{ padding: "0 12px" }}>
           <DeltaCell primary={rowData.primary.errorCount} compare={hasCompare ? rowData.compareAvg.errorCount : null} fmt={fmtCount} threshold={settings.thresholds.errorCount} />
@@ -867,6 +972,8 @@ export const InfrastructurePanel: React.FC = () => {
       accessor: "primary",
       width: "content",
       minWidth: 90,
+      sortType: 'number',
+      sortAccessor: (row: InfraRow) => row.primary.errorRatePct,
       cell: ({ rowData }) => (
         <div style={{ padding: "0 12px" }}>
           <DeltaCell primary={rowData.primary.errorRatePct} compare={hasCompare ? rowData.compareAvg.errorRatePct : null} fmt={fmtErrPct} threshold={settings.thresholds.errorRate} />
@@ -879,6 +986,8 @@ export const InfrastructurePanel: React.FC = () => {
       accessor: "primary",
       width: "content",
       minWidth: 100,
+      sortType: 'number',
+      sortAccessor: (row: InfraRow) => row.primary.memoryMb,
       cell: ({ rowData }) => (
         <div style={{ padding: "0 12px" }}>
           <DeltaCell primary={rowData.primary.memoryMb} compare={hasCompare ? rowData.compareAvg.memoryMb : null} fmt={fmtMiB} threshold={settings.thresholds.memory} />
@@ -894,6 +1003,8 @@ export const InfrastructurePanel: React.FC = () => {
     accessor: "primary" as const,
     width: "content" as const,
     minWidth: 100,
+    sortType: 'number' as const,
+    sortAccessor: (row: InfraRow) => row.primary.techMetrics[def.metricKey] ?? null,
     cell: ({ rowData }: { rowData: InfraRow }) => {
       const primary = rowData.primary.techMetrics[def.metricKey] ?? null;
       const compare = hasCompare ? (rowData.compareAvg.techMetrics[def.metricKey] ?? null) : null;
@@ -908,6 +1019,13 @@ export const InfrastructurePanel: React.FC = () => {
   }));
 
   const columns = [...baseColumns, ...techColumns];
+
+  const infraColDefs: ColPickerDef[] = useMemo(() => [
+    ...INFRA_BASE_COL_DEFS,
+    ...activeTechDefs.map(def => ({ id: `tech_${def.metricKey}`, label: def.label + (def.unit ? ` (${def.unit})` : "") })),
+  ], [activeTechDefs]);
+
+  const visibleColumns = columns.filter(c => c.id === "select" || !hiddenCols.has(c.id));
 
   const rowThresholds = rows.length > 0 && hasCompare
     ? [{
@@ -938,22 +1056,38 @@ export const InfrastructurePanel: React.FC = () => {
       {/* Filters */}
       <Flex gap={8} alignItems="flex-end" flexWrap="wrap">
         <div style={{ width: "280px" }}>
-          <Select<string>
-            value={filterStep}
-            onChange={(v) => { setFilterStep(v ?? null); setActiveKey(null); }}
+          <Select<string, true>
+            multiple={true}
+            value={filterSteps}
+            onChange={(v) => { setFilterSteps(v ?? []); setActiveKey(null); }}
             disabled={servicesLoading}
           >
             <Select.Trigger placeholder="All test steps" width="full" />
             <Select.Content>
               <Select.Filter />
-              {uniqueSteps.map((s) => <Select.Option key={s} value={s}>{s}</Select.Option>)}
+              {uniqueSteps.map((s) => <Select.Option key={s} value={s}>{normalizeNaKeptn(s)}</Select.Option>)}
+            </Select.Content>
+          </Select>
+        </div>
+        <div style={{ width: "200px" }}>
+          <Select<string, true>
+            multiple={true}
+            value={filterScripts}
+            onChange={(v) => { setFilterScripts(v ?? []); setActiveKey(null); }}
+            disabled={servicesLoading}
+          >
+            <Select.Trigger placeholder="All scripts" width="full" />
+            <Select.Content>
+              <Select.Filter />
+              {uniqueScripts.map((s) => <Select.Option key={s} value={s}>{s}</Select.Option>)}
             </Select.Content>
           </Select>
         </div>
         <div style={{ width: "280px" }}>
-          <Select<string>
-            value={filterRequest}
-            onChange={(v) => { setFilterRequest(v ?? null); setActiveKey(null); }}
+          <Select<string, true>
+            multiple={true}
+            value={filterRequests}
+            onChange={(v) => { setFilterRequests(v ?? []); setActiveKey(null); }}
             disabled={servicesLoading}
           >
             <Select.Trigger placeholder="All requests" width="full" />
@@ -964,9 +1098,10 @@ export const InfrastructurePanel: React.FC = () => {
           </Select>
         </div>
         <div style={{ width: "200px" }}>
-          <Select<string>
-            value={filterZone}
-            onChange={(v) => { setFilterZone(v ?? null); setActiveKey(null); }}
+          <Select<string, true>
+            multiple={true}
+            value={filterZones}
+            onChange={(v) => { setFilterZones(v ?? []); setActiveKey(null); }}
             disabled={servicesLoading}
           >
             <Select.Trigger placeholder="All zones" width="full" />
@@ -976,10 +1111,10 @@ export const InfrastructurePanel: React.FC = () => {
             </Select.Content>
           </Select>
         </div>
-        {(filterStep || filterRequest || filterZone) && (
+        {(filterSteps.length > 0 || filterRequests.length > 0 || filterScripts.length > 0 || filterZones.length > 0) && (
           <span
             style={{ fontSize: "0.8em", color: "#8e9099", cursor: "pointer", whiteSpace: "nowrap" }}
-            onClick={() => { setFilterStep(null); setFilterRequest(null); setFilterZone(null); setActiveKey(null); }}
+            onClick={() => { clearFilters(); setActiveKey(null); }}
           >
             Clear filters ({rows.length} service{rows.length !== 1 ? "s" : ""})
           </span>
@@ -989,6 +1124,9 @@ export const InfrastructurePanel: React.FC = () => {
             Red delta = regression vs {compareTests.length} comparison test{compareTests.length > 1 ? "s" : ""}
           </span>
         )}
+        <div style={{ marginLeft: hasCompare ? "0" : "auto" }}>
+          <ColumnPicker defs={infraColDefs} hidden={hiddenCols} onChange={setHiddenCols} />
+        </div>
       </Flex>
 
       {/* States */}
@@ -1005,8 +1143,9 @@ export const InfrastructurePanel: React.FC = () => {
         <>
           <DataTable
             data={rows}
-            columns={columns}
+            columns={visibleColumns}
             fullWidth
+            sortable
             rowThresholds={rowThresholds}
           >
             <DataTable.Pagination defaultPageSize={10} />

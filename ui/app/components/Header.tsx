@@ -10,6 +10,8 @@ import {
   useSelectedTest,
 } from "../context/SelectedTestContext";
 import { SettingsSheet } from "./SettingsSheet";
+import { useSettings } from "../context/SettingsContext";
+import { parseProjectFromTestExecution, parseScenarioFromTestExecution } from "../utils/sloData";
 import { logger } from "../utils/logger";
 
 const LOOKUP_QUERY =
@@ -23,30 +25,34 @@ export const Header = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { data, isLoading, error } = useDql<TestExecution>(LOOKUP_QUERY);
   const { primaryTest, setPrimaryTest, compareTests, setCompareTests } = useSelectedTest();
+  const { settings } = useSettings();
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
 
   const allRecords = data?.records ?? [];
 
-  const projectNames = [
-    ...new Set(allRecords.map((r) => r.te_projectname).filter(Boolean)),
-  ].sort() as string[];
+  // Resolve project/scenario from te_* fields when present; fall back to parsing test_execution
+  const getProject = (r: TestExecution) => r.te_projectname || parseProjectFromTestExecution(r.test_execution);
+  const getScenario = (r: TestExecution) => r.te_scenarioname || parseScenarioFromTestExecution(r.test_execution);
 
-  const scenarioNames = [
+  const projectNames = [...new Set(allRecords.map(getProject).filter(Boolean))].sort() as string[];
+
+  const allScenarioNames = [
     ...new Set(
-      (selectedProject
-        ? allRecords.filter((r) => r.te_projectname === selectedProject)
-        : allRecords
-      )
-        .map((r) => r.te_scenarioname)
+      (selectedProject ? allRecords.filter((r) => getProject(r) === selectedProject) : allRecords)
+        .map(getScenario)
         .filter(Boolean)
     ),
   ].sort() as string[];
 
+  const scenarioNames = settings.benchmarkScenarioFilter
+    ? allScenarioNames.filter((s) => s.toLowerCase().includes("benchmark"))
+    : allScenarioNames;
+
   const testRuns = allRecords.filter(
     (r) =>
-      r.te_scenarioname === selectedScenario &&
-      (!selectedProject || r.te_projectname === selectedProject)
+      getScenario(r) === selectedScenario &&
+      (!selectedProject || getProject(r) === selectedProject)
   );
 
   const compareRuns = testRuns.filter(
@@ -87,8 +93,8 @@ export const Header = () => {
       const matchingProjects = [
         ...new Set(
           allRecords
-            .filter((r) => r.te_scenarioname === scenario)
-            .map((r) => r.te_projectname)
+            .filter((r) => getScenario(r) === scenario)
+            .map(getProject)
             .filter(Boolean)
         ),
       ] as string[];
@@ -106,11 +112,11 @@ export const Header = () => {
     if (found) {
       setCompareTests(compareTests.filter((t) => t.te_uuid !== found.te_uuid));
     }
-    if (found && !selectedScenario && found.te_scenarioname) {
-      setSelectedScenario(found.te_scenarioname);
+    if (found && !selectedScenario) {
+      setSelectedScenario(getScenario(found));
     }
-    if (found && !selectedProject && found.te_projectname) {
-      setSelectedProject(found.te_projectname);
+    if (found && !selectedProject) {
+      setSelectedProject(getProject(found));
     }
   };
 

@@ -3,7 +3,7 @@
   "environmentUrl": "https://xkt51160.apps.dynatrace.com/",
   "app": {
     "name": "dt-neoload-analysis-app",
-    "version": "0.0.0",
+    "version": "0.0.5",
     "description": "A starting project with routing, fetching data, and charting",
     "id": "my.dt.neoload.analysis.app",
     "scopes": [
@@ -14,7 +14,9 @@
       { "name": "storage:bizevents:read", "comment": "Read business events" },
       { "name": "storage:metrics:read", "comment": "Read metrics" },
       { "name": "storage:entities:read", "comment": "Read entity data" },
-      { "name": "storage:system:read", "comment": "Read system tables" }
+      { "name": "storage:system:read", "comment": "Read system tables" },
+      { "name": "state:app-states:read", "comment": "Read shared app state (SLO config)" },
+      { "name": "state:app-states:write", "comment": "Write shared app state (SLO config)" }
     ]
   }
 }
