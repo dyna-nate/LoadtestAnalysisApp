@@ -1,0 +1,23 @@
+{
+  "$schema": "./.dt-app/app.config.schema.json",
+  "environmentUrl": "https://xkt51160.apps.dynatrace.com/",
+  "app": {
+    "name": "dt-neoload-analysis-app",
+    "version": "0.0.0",
+    "description": "A starting project with routing, fetching data, and charting",
+    "id": "my.dt.neoload.analysis.app",
+    "scopes": [
+      { "name": "storage:logs:read", "comment": "default template" },
+      { "name": "storage:buckets:read", "comment": "default template" },
+      { "name": "storage:logs:read", "comment": "Read log data" },
+      { "name": "storage:events:read", "comment": "Read events" },
+      { "name": "storage:bizevents:read", "comment": "Read business events" },
+      { "name": "storage:metrics:read", "comment": "Read metrics" },
+      { "name": "storage:entities:read", "comment": "Read entities" },
+      { "name": "environment-api:entities:read", "comment": "Read entity data" },
+      { "name": "storage:buckets:read", "comment": "Read lookup tables" },
+      { "name": "davis:problems:read", "comment": "Read Davis problems" },
+      { "name": "smartscape:read", "comment": "Read Smartscape topology" }
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+2026-07-08T15:14:36.926Z DEBUG [PLUGIN] Searching for configuration file
