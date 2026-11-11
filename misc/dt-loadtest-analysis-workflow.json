@@ -1,0 +1,285 @@
+{
+  "id": "7d1e4f24-db0d-4e4d-ad4b-125b808f3528",
+  "title": "dt-loadtest-analysis-workflow",
+  "description": "",
+  "actor": "2961bee5-cd10-42f7-8495-663396ced1a0",
+  "owner": "2961bee5-cd10-42f7-8495-663396ced1a0",
+  "ownerType": "USER",
+  "isPrivate": true,
+  "schemaVersion": 4,
+  "trigger": {
+    "schedule": {
+      "isActive": true,
+      "trigger": {
+        "type": "interval",
+        "intervalMinutes": 45
+      },
+      "rule": null,
+      "filterParameters": {
+        "earliestStart": "2026-07-08",
+        "earliestStartTime": "12:10"
+      },
+      "timezone": "America/Chicago",
+      "inputs": {}
+    }
+  },
+  "result": null,
+  "type": "STANDARD",
+  "input": {},
+  "hourlyExecutionLimit": 1000,
+  "guide": null,
+  "tasks": {
+    "execute_dql-step_execution_services": {
+      "name": "execute_dql-step_execution_services",
+      "input": {
+        "query": "// fetch spans, from: -8h, to: -7h, scanLimitGBytes:-1\nfetch spans, from: -1h, to: now(), scanLimitGBytes:-1\n| filter isNotNull(`request_attribute.LoadTest_TestExecution`)\n| filter `request_attribute.LoadTest_TestExecution` == \"{{ _.item }}\"\n| fields\n      source_id        = replaceString(replaceString(replaceString(`request_attribute.LoadTest_SourceID`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"), \n      test_execution   = replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n      zone             = replaceString(replaceString(replaceString(`request_attribute.LoadTest_Zone`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n      te_uuid          = substring(replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"), from: -36),\n      te_scenarioname  = substring(replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"), from: indexOf(replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"), \"-\") + 1, to: stringLength(replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\")) - 37),\n      script_name      = replaceString(replaceString(replaceString(`request_attribute.LoadTest__ScriptName`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n      transaction_name = replaceString(replaceString(replaceString(`request_attribute.LoadTest_TransactionName`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n      page_context     = replaceString(replaceString(replaceString(`request_attribute.LoadTest_PageContext`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n      service_id       = dt.smartscape.service\n\n| dedup page_context, script_name, transaction_name, service_id\n\n| lookup [load \"/lookups/perftest/neoload/testsummarybytime\" | fields te_uuid, test_start, test_end],\n    sourceField: te_uuid, lookupField: te_uuid, prefix: \"ts.\"\n\n| lookup [smartscapeNodes SERVICE | fields id, name],\n    sourceField: service_id, lookupField: id, prefix: \"service.\"\n\n| lookup [\n    smartscapeEdges \"*\"\n    | filter in(type, {\"belongs_to\", \"runs_on\"})\n    | filter in(target_type, {\"PROCESS\"})\n    | summarize process_ids = collectArray(target_id), by: { source_id }\n  ], sourceField: service.id, lookupField: source_id, prefix: \"process_details.\"\n| expand process_id = process_details.process_ids\n\n| lookup [smartscapeNodes PROCESS],\n    sourceField: process_id, lookupField: id, prefix: \"process_metadata.\"\n\n| fieldsAdd process_exe        = process_metadata.process.metadata[EXE_NAME]\n| fieldsAdd process_id_classic = process_metadata.id_classic\n\n| fieldsAdd tech_type = coalesce(\n    if(isNotNull(process_metadata.process.metadata[ASP_DOT_NET_CORE_APPLICATION_PATH]), \"ASP_DOT_NET_CORE\"),\n    if(isNotNull(process_metadata.process.metadata[WEB_SPHERE_SERVER_NAME]),            \"WEB_SPHERE\"),\n    if(isNotNull(process_metadata.process.metadata[JBOSS_HOME]),                        \"JBOSS\"),\n    if(isNotNull(process_metadata.process.metadata[IIS_APP_POOL]),                      \"IIS_APP_POOL\"),\n    if(isNotNull(process_metadata.process.metadata[SPRINGBOOT_APP_NAME]),               \"SPRINGBOOT\"),\n    if(isNotNull(process_metadata.process.metadata[DOTNET_COMMAND]),                    \"DOTNET\"),\n    if(isNotNull(process_metadata.process.metadata[NODE_JS_SCRIPT_NAME]),               \"NODE_JS\"),\n    if(isNotNull(process_metadata.process.metadata[RUBY_SCRIPT_PATH]),                  \"RUBY\"),\n    if(isNotNull(process_metadata.process.metadata[APACHE_CONFIG_PATH]),                \"APACHE\"),\n    if(isNotNull(process_metadata.process.metadata[CATALINA_HOME]),                     \"TOMCAT\")\n  )\n\n| fieldsRemove service.name, service.id, process_details.process_ids,\n               process_metadata.process.software_technologies.os,\n               process_metadata.process.metadata\n\n| summarize\n    services = collectArray(record(service_id, process_id_classic, process_exe, tech_type)),\n    by: {\n          source_id,\n          test_execution,\n          test_start = ts.test_start,\n          test_end = ts.test_end,\n          zone,\n          te_uuid,\n          te_scenarioname,\n          script_name,\n          transaction_name,\n          page_context,\n          service_id\n        }\n\n// fetch spans, from: -1h, to: now(), scanLimitGBytes:-1\n// | filter isNotNull(`request_attribute.NeoLoad_TestExecution`)\n// | filter `request_attribute.NeoLoad_TestExecution` == \"{{ _.item }}\"\n// | fields\n//     test_execution = replaceString(replaceString(replaceString(`request_attribute.NeoLoad_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n//     te_uuid        = substring(request_attribute.NeoLoad_TestExecution, from: -36),\n//     scenario_name  = arrayFirst(`request_attribute.NeoLoad_ScenarioName`),\n//     request        = arrayFirst(`request_attribute.NeoLoad_Requests`),\n//     zone           = arrayFirst(`request_attribute.NeoLoad_Zone`),\n//     na_keptn       = `request_attribute.NA_keptn`,\n//     service_id     = dt.smartscape.service\n\n// | dedup na_keptn, request, zone, service_id\n\n// | lookup [load \"/lookups/perftest/neoload/testsummarybytime\" | fields te_uuid, test_start, test_end],\n//     sourceField: te_uuid, lookupField: te_uuid, prefix: \"ts.\"\n\n// | lookup [smartscapeNodes SERVICE | fields id, name],\n//     sourceField: service_id, lookupField: id, prefix: \"service.\"\n\n// | lookup [\n//     smartscapeEdges \"*\"\n//     | filter in(type, {\"belongs_to\", \"runs_on\"})\n//     | filter in(target_type, {\"PROCESS\"})\n//     | summarize process_ids = collectArray(target_id), by: { source_id }\n//   ], sourceField: service.id, lookupField: source_id, prefix: \"process_details.\"\n// | expand process_id = process_details.process_ids\n\n// | lookup [smartscapeNodes PROCESS],\n//     sourceField: process_id, lookupField: id, prefix: \"process_metadata.\"\n\n// | fieldsAdd process_exe        = process_metadata.process.metadata[EXE_NAME]\n// | fieldsAdd process_id_classic = process_metadata.id_classic\n\n// | fieldsAdd tech_type = coalesce(\n//     if(isNotNull(process_metadata.process.metadata[ASP_DOT_NET_CORE_APPLICATION_PATH]), \"ASP_DOT_NET_CORE\"),\n//     if(isNotNull(process_metadata.process.metadata[WEB_SPHERE_SERVER_NAME]),            \"WEB_SPHERE\"),\n//     if(isNotNull(process_metadata.process.metadata[JBOSS_HOME]),                        \"JBOSS\"),\n//     if(isNotNull(process_metadata.process.metadata[IIS_APP_POOL]),                      \"IIS_APP_POOL\"),\n//     if(isNotNull(process_metadata.process.metadata[SPRINGBOOT_APP_NAME]),               \"SPRINGBOOT\"),\n//     if(isNotNull(process_metadata.process.metadata[DOTNET_COMMAND]),                    \"DOTNET\"),\n//     if(isNotNull(process_metadata.process.metadata[NODE_JS_SCRIPT_NAME]),               \"NODE_JS\"),\n//     if(isNotNull(process_metadata.process.metadata[RUBY_SCRIPT_PATH]),                  \"RUBY\"),\n//     if(isNotNull(process_metadata.process.metadata[APACHE_CONFIG_PATH]),                \"APACHE\"),\n//     if(isNotNull(process_metadata.process.metadata[CATALINA_HOME]),                     \"TOMCAT\")\n//   )\n\n// | fieldsRemove service.name, service.id, process_details.process_ids,\n//                process_metadata.process.software_technologies.os,\n//                process_metadata.process.metadata\n\n// | summarize\n//     services = collectArray(record(service_id, process_id_classic, process_exe, tech_type)),\n//     by: { test_execution, te_uuid, scenario_name, request, zone, na_keptn,\n//           test_start = ts.test_start, test_end = ts.test_end }\n"
+      },
+      "action": "dynatrace.automations:execute-dql-query",
+      "active": true,
+      "position": {
+        "x": 1,
+        "y": 3
+      },
+      "conditions": {
+        "states": {
+          "execute_js-extract_test_execution_list": "OK"
+        }
+      },
+      "withItems": "item in {{ result(\"execute_js-extract_test_execution_list\").testExecutions }}",
+      "concurrency": 1,
+      "description": "Make use of Dynatrace Grail data in your workflow.",
+      "predecessors": [
+        "execute_js-extract_test_execution_list"
+      ]
+    },
+    "execute_dql-step_execution_performance": {
+      "name": "execute_dql-step_execution_performance",
+      "input": {
+        "query": "//fetch spans, from: -8h, to: -7h, scanLimitGBytes:-1\nfetch spans, from: -1h, to: now(), scanLimitGBytes:-1\n| filter isNotNull(`request_attribute.LoadTest_TestExecution`)\n| filter `request_attribute.LoadTest_TestExecution` == \"{{ _.item }}\"\n| summarize\n    count      = count(),\n    avg_dur_ms = avg(duration) / 1000000,\n    min_dur_ms = min(duration) / 1000000,\n    max_dur_ms = max(duration) / 1000000,\n    p25_dur_ms = percentile(duration, 25) / 1000000,\n    p50_dur_ms = percentile(duration, 50) / 1000000,\n    p75_dur_ms = percentile(duration, 75) / 1000000,\n    p90_dur_ms = percentile(duration, 90) / 1000000,\n    p95_dur_ms = percentile(duration, 95) / 1000000,\n    p99_dur_ms = percentile(duration, 99) / 1000000,\n    by: {\n      source_id        = replaceString(replaceString(replaceString(`request_attribute.LoadTest_SourceID`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"), \n      test_execution   = replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n      zone             = replaceString(replaceString(replaceString(`request_attribute.LoadTest_Zone`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n      te_uuid          = substring(replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"), from: -36),\n      te_scenarioname  = substring(replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"), from: indexOf(replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"), \"-\") + 1, to: stringLength(replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\")) - 37),\n      script_name      = replaceString(replaceString(replaceString(`request_attribute.LoadTest__ScriptName`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n      transaction_name = replaceString(replaceString(replaceString(`request_attribute.LoadTest_TransactionName`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n      page_context     = replaceString(replaceString(replaceString(`request_attribute.LoadTest_PageContext`, \" \", \"\"), \"(\", \"-\"), \")\", \"\")\n    }\n    \n// fetch spans, from: -1h, to: now(), scanLimitGBytes:-1\n// //| filter isNotNull(`request_attribute.NeoLoad_TestExecution`)\n// | filter `request_attribute.NeoLoad_TestExecution` == \"{{ _.item }}\"\n// | summarize\n//     count      = count(),\n//     avg_dur_ms = avg(duration) / 1000000,\n//     min_dur_ms = min(duration) / 1000000,\n//     max_dur_ms = max(duration) / 1000000,\n//     p25_dur_ms = percentile(duration, 25) / 1000000,\n//     p50_dur_ms = percentile(duration, 50) / 1000000,\n//     p75_dur_ms = percentile(duration, 75) / 1000000,\n//     p90_dur_ms = percentile(duration, 90) / 1000000,\n//     p95_dur_ms = percentile(duration, 95) / 1000000,\n//     p99_dur_ms = percentile(duration, 99) / 1000000,\n//     by: {\n//       test_execution = replaceString(replaceString(replaceString(`request_attribute.NeoLoad_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"),\n//       te_uuid        = substring(request_attribute.NeoLoad_TestExecution, from: -36),\n//       scenario_name  = arrayFirst(`request_attribute.NeoLoad_ScenarioName`),\n//       request        = arrayFirst(`request_attribute.NeoLoad_Requests`),\n//       zone           = arrayFirst(`request_attribute.NeoLoad_Zone`),\n//       na_keptn       = `request_attribute.NA_keptn`\n//     }",
+        "failOnEmptyResult": false
+      },
+      "action": "dynatrace.automations:execute-dql-query",
+      "active": true,
+      "position": {
+        "x": 0,
+        "y": 3
+      },
+      "conditions": {
+        "states": {
+          "execute_js-extract_test_execution_list": "OK"
+        }
+      },
+      "withItems": "item in {{ result(\"execute_js-extract_test_execution_list\").testExecutions }}",
+      "concurrency": 1,
+      "description": "Make use of Dynatrace Grail data in your workflow.",
+      "predecessors": [
+        "execute_js-extract_test_execution_list"
+      ]
+    },
+    "execute_js-extract_test_execution_list": {
+      "name": "execute_js-extract_test_execution_list",
+      "input": {
+        "script": "import { execution } from '@dynatrace-sdk/automation-utils';\n\nconst PREVIOUS_STEP = 'execute_dql-summarized_execution_details_bytime';\n\nexport default async function ({ executionId }) {\n  const ex = await execution(executionId);\n  const stepResult = await ex.result(PREVIOUS_STEP);\n  const records = stepResult?.records ?? [];\n\n  console.log(`Received ${records.length} records from DQL`);\n\n  const testExecutions = records.map((r) => r.test_execution);\n\n  console.log(`Extracted ${testExecutions.length} test execution(s):`);\n  for (const t of testExecutions) {\n    console.log(t);\n  }\n\n  return { testExecutions };\n}",
+        "sdkMajorVersions": {
+          "@dynatrace-sdk/units": "1",
+          "@dynatrace-sdk/client-hub": "2",
+          "@dynatrace-sdk/client-iam": "1",
+          "@dynatrace-sdk/adhoc-utils": "1",
+          "@dynatrace-sdk/http-client": "1",
+          "@dynatrace-sdk/client-query": "1",
+          "@dynatrace-sdk/shared-errors": "1",
+          "@dynatrace-sdk/error-handlers": "1",
+          "@dynatrace-sdk/app-environment": "1",
+          "@dynatrace-sdk/client-document": "1",
+          "@dynatrace-sdk/automation-utils": "2",
+          "@dynatrace-sdk/user-preferences": "1",
+          "@dynatrace-sdk/client-automation": "8",
+          "@dynatrace-sdk/client-hub-catalog": "0",
+          "@dynatrace-sdk/shared-client-utils": "1",
+          "@dynatrace-sdk/client-resource-store": "1",
+          "@dynatrace-sdk/client-davis-analyzers": "1",
+          "@dynatrace-sdk/client-bucket-management": "3",
+          "@dynatrace-sdk/client-app-engine-registry": "3",
+          "@dynatrace-sdk/client-classic-environment-v1": "2",
+          "@dynatrace-sdk/client-classic-environment-v2": "6",
+          "@dynatrace-sdk/client-app-engine-edge-connect": "1",
+          "@dynatrace-sdk/client-service-level-objectives": "1",
+          "@dynatrace-sdk/client-filter-segment-management": "1",
+          "@dynatrace-sdk/client-platform-management-service": "1"
+        }
+      },
+      "action": "dynatrace.automations:run-javascript",
+      "position": {
+        "x": 0,
+        "y": 2
+      },
+      "conditions": {
+        "states": {
+          "execute_dql-summarized_execution_details_bytime": "OK"
+        }
+      },
+      "description": "Run custom JavaScript code.",
+      "predecessors": [
+        "execute_dql-summarized_execution_details_bytime"
+      ]
+    },
+    "write-lookup_step_execution_details_services": {
+      "name": "write-lookup_step_execution_details_services",
+      "input": {
+        "script": "// Workflow JS action: write-bizevents_step_execution_details_services\n// Replaces the lookup-table approach for testsummary_services_detailed.\n// Reads DQL step results (possibly looped), deduplicates against existing\n// bizevents, and ingests new records as business events.\n//\n// NOTE: The `services` field is a nested array of records. Per Dynatrace\n// documentation, nested JSON objects are stored as strings in Grail.\n// When querying back via DQL, use `parse services, \"JSON:services_parsed\"`\n// to work with the array contents.\n\nimport { execution } from '@dynatrace-sdk/automation-utils';\nimport { queryExecutionClient } from '@dynatrace-sdk/client-query';\n\nconst PREVIOUS_STEP = 'execute_dql-step_execution_services';\nconst EVENT_TYPE    = 'loadtest.services.detailed';\nconst EVENT_SOURCE  = 'loadtest-workflow';\nconst BATCH_SIZE    = 500;\n\n// \u2500\u2500 Dedup check \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nasync function getExistingRowKeys(teUuids) {\n  const uuidList = teUuids.map(id => `\"${id}\"`).join(', ');\n  try {\n    const result = await queryExecutionClient.queryExecute({\n      body: {\n        query: `fetch bizevents, from: -365d\n          | filter in(event.type, {\"neoload.services.detailed\", \"loadtest.services.detailed\"})\n          | filter in(te_uuid, {${uuidList}})\n          | fields row_key\n          | dedup row_key`,\n        requestTimeoutMilliseconds: 30000,\n      },\n    });\n    return new Set((result.result?.records ?? []).map(r => r.row_key));\n  } catch (e) {\n    console.warn('Could not check existing bizevents (will attempt full ingest):', e.message);\n    return new Set();\n  }\n}\n\n// \u2500\u2500 Ingest \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nasync function ingestBatch(events) {\n  const response = await fetch(\n    '/platform/classic/environment-api/v2/bizevents/ingest',\n    {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/cloudevents-batch+json' },\n      body: JSON.stringify(events),\n    }\n  );\n  if (!response.ok) {\n    const errorText = await response.text();\n    throw new Error(`Ingest failed [${response.status}]: ${errorText}`);\n  }\n}\n\n// \u2500\u2500 Main \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nexport default async function ({ executionId }) {\n  const ex = await execution(executionId);\n  const stepResult = await ex.result(PREVIOUS_STEP);\n\n  const resultArray = Array.isArray(stepResult) ? stepResult : [stepResult];\n  const records = resultArray.flatMap((r) => r?.records ?? []);\n\n  console.log(`Received ${records.length} records across ${resultArray.length} iteration(s)`);\n\n  if (records.length === 0) {\n    console.log('No records returned \u2014 nothing to ingest');\n    return { processed: 0 };\n  }\n\n  const allRecords = records.map((r) => ({\n    ...r,\n    row_key: `${r.te_uuid}::${r.source_id}::${r.zone}::${r.transaction_name}::${r.script_name}::${r.page_context ?? ''}`,\n  }));\n\n  const teUuids = [...new Set(allRecords.map(r => r.te_uuid))];\n  console.log(`Found ${teUuids.length} unique test execution(s): ${teUuids.join(', ')}`);\n\n  const existingKeys = await getExistingRowKeys(teUuids);\n  console.log(`${existingKeys.size} existing event(s) found \u2014 skipping duplicates`);\n\n  const newRecords = allRecords.filter(r => !existingKeys.has(r.row_key));\n  console.log(`New records to ingest: ${newRecords.length}`);\n\n  if (newRecords.length === 0) {\n    console.log('All records already ingested \u2014 nothing to do');\n    return { processed: 0, skipped: allRecords.length };\n  }\n\n  const events = newRecords.map((r) => ({\n    specversion: '1.0',\n    id: r.row_key,\n    source: EVENT_SOURCE,\n    type: EVENT_TYPE,\n    time: r.test_start ?? new Date().toISOString(),\n    ...r,\n  }));\n\n  let ingested = 0;\n  for (let i = 0; i < events.length; i += BATCH_SIZE) {\n    const batch = events.slice(i, i + BATCH_SIZE);\n    await ingestBatch(batch);\n    ingested += batch.length;\n    console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ingested ${batch.length} events (${ingested}/${events.length} total)`);\n  }\n\n  return { processed: ingested, skipped: allRecords.length - newRecords.length };\n}\n\n\n// import { execution } from '@dynatrace-sdk/automation-utils';\n// import { queryExecutionClient } from '@dynatrace-sdk/client-query';\n\n// const DEDUP_KEY = 'row_key';\n// const PREVIOUS_STEP = 'execute_dql-step_execution_services';\n\n// async function mergeLookup(newRecords, lookupPath, dedupKey) {\n//   let existingRecords = [];\n//   try {\n//     const queryResult = await queryExecutionClient.queryExecute({\n//       body: {\n//         query: `load \"${lookupPath}\"`,\n//         requestTimeoutMilliseconds: 30000,\n//       },\n//     });\n//     existingRecords = queryResult.result?.records ?? [];\n//     console.log(`[${lookupPath}] Read ${existingRecords.length} existing records`);\n//   } catch (e) {\n//     console.warn(`[${lookupPath}] Could not load existing lookup table (may not exist yet):`, e.message);\n//   }\n\n//   const existingKeys = new Set(existingRecords.map((r) => r[dedupKey]));\n//   const trulyNewRecords = newRecords.filter((r) => !existingKeys.has(r[dedupKey]));\n//   const mergedRecords = [...existingRecords, ...trulyNewRecords];\n\n//   console.log(\n//     `[${lookupPath}] Existing: ${existingRecords.length} | New: ${newRecords.length} | Skipped: ${newRecords.length - trulyNewRecords.length} | Total: ${mergedRecords.length}`\n//   );\n\n//   if (trulyNewRecords.length === 0) {\n//     console.log(`[${lookupPath}] No new records \u2014 lookup table unchanged`);\n//     return { status: 'no_change', total: mergedRecords.length };\n//   }\n\n//   const jsonContent = JSON.stringify(mergedRecords);\n//   const boundary = '----DynatraceFormBoundary' + Date.now().toString(16);\n//   const body = [\n//     `--${boundary}`,\n//     'Content-Disposition: form-data; name=\"request\"',\n//     'Content-Type: application/json',\n//     '',\n//     JSON.stringify({\n//       filePath: lookupPath,\n//       parsePattern: 'JSON:data',\n//       lookupField: dedupKey,\n//       overwrite: true,\n//       autoFlatten: true,  // preserve nested services array-of-records\n//     }),\n//     `--${boundary}`,\n//     'Content-Disposition: form-data; name=\"content\"; filename=\"data.json\"',\n//     'Content-Type: application/json',\n//     '',\n//     jsonContent,\n//     `--${boundary}--`,\n//   ].join('\\r\\n');\n\n//   const uploadResponse = await fetch(\n//     '/platform/storage/resource-store/v1/files/tabular/lookup:upload',\n//     {\n//       method: 'POST',\n//       headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },\n//       body,\n//     }\n//   );\n\n//   if (!uploadResponse.ok) {\n//     const errorText = await uploadResponse.text();\n//     throw new Error(`[${lookupPath}] Upload failed [${uploadResponse.status}]: ${errorText}`);\n//   }\n\n//   console.log(`[${lookupPath}] Upload complete \u2014 ${mergedRecords.length} total records`);\n//   return { status: 'success', added: trulyNewRecords.length, total: mergedRecords.length };\n// }\n\n// export default async function ({ executionId }) {\n//   const ex = await execution(executionId);\n//   const stepResult = await ex.result(PREVIOUS_STEP);\n\n//   // Result is an array of per-iteration DQL results \u2014 flatten all records\n//   const resultArray = Array.isArray(stepResult) ? stepResult : [stepResult];\n//   const records = resultArray.flatMap((r) => r?.records ?? []);\n\n//   console.log(`Received ${records.length} total records across ${resultArray.length} iteration(s)`);\n\n//   if (records.length === 0) {\n//     console.warn(`No records returned from step \"${PREVIOUS_STEP}\". Check the step name matches exactly.`);\n//     return { processed: 0, results: [] };\n//   }\n\n//   // row_key scopes dedup to one record per test step (na_keptn + request + zone) per test execution\n//   const allRecords = records.map((r) => ({\n//     ...r,\n//     row_key: `${r.te_uuid}::${r.na_keptn}::${r.request ?? ''}::${r.zone ?? ''}`,\n//   }));\n\n//   console.log(`Received ${allRecords.length} service detail rows from DQL`);\n\n//   const byTeUuid = {};\n//   for (const r of allRecords) {\n//     if (!byTeUuid[r.te_uuid]) byTeUuid[r.te_uuid] = [];\n//     byTeUuid[r.te_uuid].push(r);\n//   }\n\n//   const teUuids = Object.keys(byTeUuid);\n//   console.log(`Found ${teUuids.length} unique test execution(s)`);\n\n//   const results = [];\n//   for (const teUuid of teUuids) {\n//     const lookupPath = `/lookups/perftest/neoload/${teUuid}/testsummary_services_detailed`;\n//     const testRecords = byTeUuid[teUuid];\n//     console.log(`[${teUuid}] Writing ${testRecords.length} records to ${lookupPath}`);\n//     const result = await mergeLookup(testRecords, lookupPath, DEDUP_KEY);\n//     results.push({ teUuid, lookupPath, ...result });\n//   }\n\n//   return { processed: teUuids.length, results };\n// }\n",
+        "sdkMajorVersions": {
+          "@dynatrace-sdk/units": "1",
+          "@dynatrace-sdk/client-hub": "2",
+          "@dynatrace-sdk/client-iam": "1",
+          "@dynatrace-sdk/adhoc-utils": "1",
+          "@dynatrace-sdk/http-client": "1",
+          "@dynatrace-sdk/client-query": "1",
+          "@dynatrace-sdk/shared-errors": "1",
+          "@dynatrace-sdk/error-handlers": "1",
+          "@dynatrace-sdk/app-environment": "1",
+          "@dynatrace-sdk/client-document": "1",
+          "@dynatrace-sdk/automation-utils": "2",
+          "@dynatrace-sdk/user-preferences": "1",
+          "@dynatrace-sdk/client-automation": "8",
+          "@dynatrace-sdk/client-hub-catalog": "0",
+          "@dynatrace-sdk/shared-client-utils": "1",
+          "@dynatrace-sdk/client-resource-store": "1",
+          "@dynatrace-sdk/client-davis-analyzers": "1",
+          "@dynatrace-sdk/client-bucket-management": "3",
+          "@dynatrace-sdk/client-app-engine-registry": "3",
+          "@dynatrace-sdk/client-classic-environment-v1": "2",
+          "@dynatrace-sdk/client-classic-environment-v2": "6",
+          "@dynatrace-sdk/client-app-engine-edge-connect": "1",
+          "@dynatrace-sdk/client-service-level-objectives": "1",
+          "@dynatrace-sdk/client-filter-segment-management": "1",
+          "@dynatrace-sdk/client-platform-management-service": "1"
+        }
+      },
+      "action": "dynatrace.automations:run-javascript",
+      "active": true,
+      "position": {
+        "x": 1,
+        "y": 4
+      },
+      "conditions": {
+        "states": {
+          "execute_dql-step_execution_services": "OK"
+        }
+      },
+      "description": "Run custom JavaScript code.",
+      "predecessors": [
+        "execute_dql-step_execution_services"
+      ]
+    },
+    "execute_dql-summarized_execution_details_bytime": {
+      "name": "execute_dql-summarized_execution_details_bytime",
+      "input": {
+        "query": "//fetch spans, from: -8h, to: -7h, scanLimitGBytes:-1\nfetch spans, from: -1h, to: now(), scanLimitGBytes:-1\n| filter isNotNull(`request_attribute.LoadTest_TestExecution`)\n| summarize\n    test_start = min(start_time),\n    test_end   = max(end_time), \n    count      = count(),\n    avg_dur_ms = avg(duration),\n    min_dur_ms = min(duration),\n    max_dur_ms = max(duration),\n    p25_dur_ms = percentile(duration, 25),\n    p50_dur_ms = percentile(duration, 50),\n    p75_dur_ms = percentile(duration, 75),\n    p90_dur_ms = percentile(duration, 90),\n    p95_dur_ms = percentile(duration, 95),\n    p99_dur_ms = percentile(duration, 99),\n    by: {  source_id       = replaceString(replaceString(replaceString(`request_attribute.LoadTest_SourceID`, \" \", \"\"), \"(\", \"-\"), \")\", \"\"), \n           test_execution  = replaceString(replaceString(replaceString(`request_attribute.LoadTest_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\")\n        }\n| fieldsAdd test_duration_ms = toLong(test_end - test_start) / 1000000\n| fieldsAdd te_uuid = substring(test_execution, from: -36)\n| fieldsAdd te_projectname = substring(test_execution, from: 0, to: indexOf(test_execution, \"-\"))\n| fieldsAdd te_scenarioname = substring(test_execution, \n    from: indexOf(test_execution, \"-\") + 1, \n    to: stringLength(test_execution) - 37)\n\n// fetch spans, from: -1h, to: now(), scanLimitGBytes:-1\n// | filter isNotNull(`request_attribute.NeoLoad_TestExecution`)\n// | summarize\n//     test_start = min(start_time),\n//     test_end   = max(end_time), \n//     count      = count(),\n//     avg_dur_ms = avg(duration),\n//     min_dur_ms = min(duration),\n//     max_dur_ms = max(duration),\n//     p25_dur_ms = percentile(duration, 25),\n//     p50_dur_ms = percentile(duration, 50),\n//     p75_dur_ms = percentile(duration, 75),\n//     p90_dur_ms = percentile(duration, 90),\n//     p95_dur_ms = percentile(duration, 95),\n//     p99_dur_ms = percentile(duration, 99),\n//     by: {test_execution = replaceString(replaceString(replaceString(`request_attribute.NeoLoad_TestExecution`, \" \", \"\"), \"(\", \"-\"), \")\", \"\")}\n// | fieldsAdd test_duration_ms = toLong(test_end - test_start) / 1000000\n// | fieldsAdd te_uuid = substring(test_execution, from: -36)\n// | fieldsAdd te_projectname = substring(test_execution, from: 0, to: indexOf(test_execution, \"-\"))\n// | fieldsAdd te_scenarioname = substring(test_execution, \n//     from: indexOf(test_execution, \"-\") + 1, \n//     to: stringLength(test_execution) - 37)"
+      },
+      "action": "dynatrace.automations:execute-dql-query",
+      "active": true,
+      "position": {
+        "x": -1,
+        "y": 1
+      },
+      "description": "Make use of Dynatrace Grail data in your workflow.",
+      "predecessors": []
+    },
+    "write-lookup_step_execution_details_performance": {
+      "name": "write-lookup_step_execution_details_performance",
+      "input": {
+        "script": "// Workflow JS action: write-bizevents_step_execution_details_performance\n// Replaces the lookup-table approach for testsummary_responsetime_detailed.\n// Reads DQL step results (possibly looped), deduplicates against existing\n// bizevents, and ingests new records as business events.\n\nimport { execution } from '@dynatrace-sdk/automation-utils';\nimport { queryExecutionClient } from '@dynatrace-sdk/client-query';\n\nconst PREVIOUS_STEP = 'execute_dql-step_execution_performance';\nconst EVENT_TYPE    = 'loadtest.responsetime.detailed';\nconst EVENT_SOURCE  = 'loadtest-workflow';\nconst BATCH_SIZE    = 500; // stay well within 5 MB payload limit\n\n// \u2500\u2500 Dedup check \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nasync function getExistingRowKeys(teUuids) {\n  const uuidList = teUuids.map(id => `\"${id}\"`).join(', ');\n  try {\n    const result = await queryExecutionClient.queryExecute({\n      body: {\n        query: `fetch bizevents, from: -365d\n          | filter in(event.type, {\"neoload.responsetime.detailed\", \"loadtest.responsetime.detailed\"})\n          | filter in(te_uuid, {${uuidList}})\n          | fields row_key\n          | dedup row_key`,\n        requestTimeoutMilliseconds: 30000,\n      },\n    });\n    return new Set((result.result?.records ?? []).map(r => r.row_key));\n  } catch (e) {\n    console.warn('Could not check existing bizevents (will attempt full ingest):', e.message);\n    return new Set();\n  }\n}\n\n// \u2500\u2500 Ingest \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nasync function ingestBatch(events) {\n  const response = await fetch(\n    '/platform/classic/environment-api/v2/bizevents/ingest',\n    {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/cloudevents-batch+json' },\n      body: JSON.stringify(events),\n    }\n  );\n  if (!response.ok) {\n    const errorText = await response.text();\n    throw new Error(`Ingest failed [${response.status}]: ${errorText}`);\n  }\n}\n\n// \u2500\u2500 Main \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nexport default async function ({ executionId }) {\n  const ex = await execution(executionId);\n  const stepResult = await ex.result(PREVIOUS_STEP);\n\n  // When the DQL step runs inside a loop, ex.result() returns an array\n  const resultArray = Array.isArray(stepResult) ? stepResult : [stepResult];\n  const records = resultArray.flatMap((r) => r?.records ?? []);\n\n  console.log(`Received ${records.length} records across ${resultArray.length} iteration(s)`);\n\n  if (records.length === 0) {\n    console.log('No records returned \u2014 nothing to ingest');\n    return { processed: 0 };\n  }\n\n  const allRecords = records.map((r) => ({\n    ...r,\n    row_key: `${r.te_uuid}::${r.source_id}::${r.zone}::${r.transaction_name}::${r.script_name}::${r.page_context ?? ''}`,\n  }));\n\n  const teUuids = [...new Set(allRecords.map(r => r.te_uuid))];\n  console.log(`Found ${teUuids.length} unique test execution(s): ${teUuids.join(', ')}`);\n\n  const existingKeys = await getExistingRowKeys(teUuids);\n  console.log(`${existingKeys.size} existing event(s) found \u2014 skipping duplicates`);\n\n  const newRecords = allRecords.filter(r => !existingKeys.has(r.row_key));\n  console.log(`New records to ingest: ${newRecords.length}`);\n\n  if (newRecords.length === 0) {\n    console.log('All records already ingested \u2014 nothing to do');\n    return { processed: 0, skipped: allRecords.length };\n  }\n\n  // Build CloudEvents batch \u2014 record fields spread as top-level extensions\n  const events = newRecords.map((r) => ({\n    specversion: '1.0',\n    id: r.row_key,\n    source: EVENT_SOURCE,\n    type: EVENT_TYPE,\n    time: r.test_start ?? new Date().toISOString(),\n    ...r,\n  }));\n\n  let ingested = 0;\n  for (let i = 0; i < events.length; i += BATCH_SIZE) {\n    const batch = events.slice(i, i + BATCH_SIZE);\n    await ingestBatch(batch);\n    ingested += batch.length;\n    console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ingested ${batch.length} events (${ingested}/${events.length} total)`);\n  }\n\n  return { processed: ingested, skipped: allRecords.length - newRecords.length };\n}\n\n\n// import { execution } from '@dynatrace-sdk/automation-utils';\n// import { queryExecutionClient } from '@dynatrace-sdk/client-query';\n\n// const DEDUP_KEY = 'row_key';\n// const PREVIOUS_STEP = 'execute_dql-step_execution_performance';\n\n// async function mergeLookup(newRecords, lookupPath, dedupKey) {\n//   let existingRecords = [];\n//   try {\n//     const queryResult = await queryExecutionClient.queryExecute({\n//       body: {\n//         query: `load \"${lookupPath}\"`,\n//         requestTimeoutMilliseconds: 30000,\n//       },\n//     });\n//     existingRecords = queryResult.result?.records ?? [];\n//     console.log(`[${lookupPath}] Read ${existingRecords.length} existing records`);\n//   } catch (e) {\n//     console.warn(`[${lookupPath}] Could not load existing lookup table (may not exist yet):`, e.message);\n//   }\n\n//   const existingKeys = new Set(existingRecords.map((r) => r[dedupKey]));\n//   const trulyNewRecords = newRecords.filter((r) => !existingKeys.has(r[dedupKey]));\n//   const mergedRecords = [...existingRecords, ...trulyNewRecords];\n\n//   console.log(\n//     `[${lookupPath}] Existing: ${existingRecords.length} | New: ${newRecords.length} | Skipped: ${newRecords.length - trulyNewRecords.length} | Total: ${mergedRecords.length}`\n//   );\n\n//   if (trulyNewRecords.length === 0) {\n//     console.log(`[${lookupPath}] No new records \u2014 lookup table unchanged`);\n//     return { status: 'no_change', total: mergedRecords.length };\n//   }\n\n//   const jsonContent = JSON.stringify(mergedRecords);\n//   const boundary = '----DynatraceFormBoundary' + Date.now().toString(16);\n//   const body = [\n//     `--${boundary}`,\n//     'Content-Disposition: form-data; name=\"request\"',\n//     'Content-Type: application/json',\n//     '',\n//     JSON.stringify({\n//       filePath: lookupPath,\n//       parsePattern: 'JSON:data',\n//       lookupField: dedupKey,\n//       overwrite: true,\n//       autoFlatten: true,\n//     }),\n//     `--${boundary}`,\n//     'Content-Disposition: form-data; name=\"content\"; filename=\"data.json\"',\n//     'Content-Type: application/json',\n//     '',\n//     jsonContent,\n//     `--${boundary}--`,\n//   ].join('\\r\\n');\n\n//   const uploadResponse = await fetch(\n//     '/platform/storage/resource-store/v1/files/tabular/lookup:upload',\n//     {\n//       method: 'POST',\n//       headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },\n//       body,\n//     }\n//   );\n\n//   if (!uploadResponse.ok) {\n//     const errorText = await uploadResponse.text();\n//     throw new Error(`[${lookupPath}] Upload failed [${uploadResponse.status}]: ${errorText}`);\n//   }\n\n//   console.log(`[${lookupPath}] Upload complete \u2014 ${mergedRecords.length} total records`);\n//   return { status: 'success', added: trulyNewRecords.length, total: mergedRecords.length };\n// }\n\n// export default async function ({ executionId }) {\n//   const ex = await execution(executionId);\n//   const stepResult = await ex.result(PREVIOUS_STEP);\n\n//   // Result is an array of per-iteration DQL results \u2014 flatten all records\n//   const resultArray = Array.isArray(stepResult) ? stepResult : [stepResult];\n//   const records = resultArray.flatMap((r) => r?.records ?? []);\n\n//   console.log(`Received ${records.length} total records across ${resultArray.length} iteration(s)`);\n\n//   if (records.length === 0) {\n//     console.log('No records returned \u2014 nothing to write');\n//     return { processed: 0, results: [] };\n//   }\n\n//   const allRecords = records.map((r) => ({\n//     ...r,\n//     row_key: `${r.te_uuid}::${r.na_keptn}`,\n//   }));\n\n//   // Group by te_uuid \u2014 one lookup table per test execution\n//   const byTeUuid = {};\n//   for (const r of allRecords) {\n//     if (!byTeUuid[r.te_uuid]) byTeUuid[r.te_uuid] = [];\n//     byTeUuid[r.te_uuid].push(r);\n//   }\n\n//   const teUuids = Object.keys(byTeUuid);\n//   console.log(`Found ${teUuids.length} unique test execution(s)`);\n\n//   const results = [];\n//   for (const teUuid of teUuids) {\n//     const lookupPath = `/lookups/perftest/neoload/${teUuid}/testsummary_responsetime_detailed`;\n//     const testRecords = byTeUuid[teUuid];\n//     console.log(`[${teUuid}] Writing ${testRecords.length} records to ${lookupPath}`);\n//     const result = await mergeLookup(testRecords, lookupPath, DEDUP_KEY);\n//     results.push({ teUuid, lookupPath, ...result });\n//   }\n\n//   return { processed: teUuids.length, results };\n// }\n",
+        "sdkMajorVersions": {
+          "@dynatrace-sdk/units": "1",
+          "@dynatrace-sdk/client-hub": "2",
+          "@dynatrace-sdk/client-iam": "1",
+          "@dynatrace-sdk/adhoc-utils": "1",
+          "@dynatrace-sdk/http-client": "1",
+          "@dynatrace-sdk/client-query": "1",
+          "@dynatrace-sdk/shared-errors": "1",
+          "@dynatrace-sdk/error-handlers": "1",
+          "@dynatrace-sdk/app-environment": "1",
+          "@dynatrace-sdk/client-document": "1",
+          "@dynatrace-sdk/automation-utils": "2",
+          "@dynatrace-sdk/user-preferences": "1",
+          "@dynatrace-sdk/client-automation": "8",
+          "@dynatrace-sdk/client-hub-catalog": "0",
+          "@dynatrace-sdk/shared-client-utils": "1",
+          "@dynatrace-sdk/client-resource-store": "1",
+          "@dynatrace-sdk/client-davis-analyzers": "1",
+          "@dynatrace-sdk/client-bucket-management": "3",
+          "@dynatrace-sdk/client-app-engine-registry": "3",
+          "@dynatrace-sdk/client-classic-environment-v1": "2",
+          "@dynatrace-sdk/client-classic-environment-v2": "6",
+          "@dynatrace-sdk/client-app-engine-edge-connect": "1",
+          "@dynatrace-sdk/client-service-level-objectives": "1",
+          "@dynatrace-sdk/client-filter-segment-management": "1",
+          "@dynatrace-sdk/client-platform-management-service": "1"
+        }
+      },
+      "action": "dynatrace.automations:run-javascript",
+      "active": true,
+      "position": {
+        "x": 0,
+        "y": 4
+      },
+      "conditions": {
+        "states": {
+          "execute_dql-step_execution_performance": "OK"
+        }
+      },
+      "description": "Run custom JavaScript code.",
+      "predecessors": [
+        "execute_dql-step_execution_performance"
+      ]
+    },
+    "write-lookup_summarized_execution-details_bytime": {
+      "name": "write-lookup_summarized_execution-details_bytime",
+      "input": {
+        "script": "import { execution } from '@dynatrace-sdk/automation-utils';\nimport { queryExecutionClient } from '@dynatrace-sdk/client-query';\n\nconst LOOKUP_PATH = '/lookups/perftest/neoload/testsummarybytime';\nconst DEDUP_KEY = 'test_execution';\nconst PREVIOUS_STEP = 'execute_dql-summarized_execution_details_bytime';\n\nasync function mergeLookup(newRecords, lookupPath, dedupKey) {\n  let existingRecords = [];\n  try {\n    const queryResult = await queryExecutionClient.queryExecute({\n      body: {\n        query: `load \"${lookupPath}\"`,\n        requestTimeoutMilliseconds: 30000,\n      },\n    });\n    existingRecords = queryResult.result?.records ?? [];\n    console.log(`[${lookupPath}] Read ${existingRecords.length} existing records`);\n  } catch (e) {\n    console.warn(`[${lookupPath}] Could not load existing lookup table (may not exist yet):`, e.message);\n  }\n\n  const existingKeys = new Set(existingRecords.map((r) => r[dedupKey]));\n  const trulyNewRecords = newRecords.filter((r) => !existingKeys.has(r[dedupKey]));\n  const mergedRecords = [...existingRecords, ...trulyNewRecords];\n\n  console.log(\n    `[${lookupPath}] Existing: ${existingRecords.length} | New: ${newRecords.length} | Skipped: ${newRecords.length - trulyNewRecords.length} | Total: ${mergedRecords.length}`\n  );\n\n  if (trulyNewRecords.length === 0) {\n    console.log(`[${lookupPath}] No new records \u2014 lookup table unchanged`);\n    return { status: 'no_change', total: mergedRecords.length };\n  }\n\n  const jsonContent = JSON.stringify(mergedRecords);\n  const boundary = '----DynatraceFormBoundary' + Date.now().toString(16);\n  const body = [\n    `--${boundary}`,\n    'Content-Disposition: form-data; name=\"request\"',\n    'Content-Type: application/json',\n    '',\n    JSON.stringify({\n      filePath: lookupPath,\n      parsePattern: 'JSON:data',\n      lookupField: dedupKey,\n      overwrite: true,\n      autoFlatten: true,\n    }),\n    `--${boundary}`,\n    'Content-Disposition: form-data; name=\"content\"; filename=\"data.json\"',\n    'Content-Type: application/json',\n    '',\n    jsonContent,\n    `--${boundary}--`,\n  ].join('\\r\\n');\n\n  const uploadResponse = await fetch(\n    '/platform/storage/resource-store/v1/files/tabular/lookup:upload',\n    {\n      method: 'POST',\n      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },\n      body,\n    }\n  );\n\n  if (!uploadResponse.ok) {\n    const errorText = await uploadResponse.text();\n    throw new Error(`[${lookupPath}] Upload failed [${uploadResponse.status}]: ${errorText}`);\n  }\n\n  console.log(`[${lookupPath}] Upload complete \u2014 ${mergedRecords.length} total records`);\n  return { status: 'success', added: trulyNewRecords.length, total: mergedRecords.length };\n}\n\nexport default async function ({ executionId }) {\n  const ex = await execution(executionId);\n  const newRecords = (await ex.result(PREVIOUS_STEP)).records;\n\n  console.log(`Received ${newRecords.length} summarized test execution(s) from DQL`);\n\n  return mergeLookup(newRecords, LOOKUP_PATH, DEDUP_KEY);\n}\n",
+        "sdkMajorVersions": {
+          "@dynatrace-sdk/units": "1",
+          "@dynatrace-sdk/client-hub": "2",
+          "@dynatrace-sdk/client-iam": "1",
+          "@dynatrace-sdk/adhoc-utils": "1",
+          "@dynatrace-sdk/http-client": "1",
+          "@dynatrace-sdk/client-query": "1",
+          "@dynatrace-sdk/shared-errors": "1",
+          "@dynatrace-sdk/error-handlers": "1",
+          "@dynatrace-sdk/app-environment": "1",
+          "@dynatrace-sdk/client-document": "1",
+          "@dynatrace-sdk/automation-utils": "2",
+          "@dynatrace-sdk/user-preferences": "1",
+          "@dynatrace-sdk/client-automation": "8",
+          "@dynatrace-sdk/client-hub-catalog": "0",
+          "@dynatrace-sdk/shared-client-utils": "1",
+          "@dynatrace-sdk/client-resource-store": "1",
+          "@dynatrace-sdk/client-davis-analyzers": "1",
+          "@dynatrace-sdk/client-bucket-management": "3",
+          "@dynatrace-sdk/client-app-engine-registry": "3",
+          "@dynatrace-sdk/client-classic-environment-v1": "2",
+          "@dynatrace-sdk/client-classic-environment-v2": "6",
+          "@dynatrace-sdk/client-app-engine-edge-connect": "1",
+          "@dynatrace-sdk/client-service-level-objectives": "1",
+          "@dynatrace-sdk/client-filter-segment-management": "1",
+          "@dynatrace-sdk/client-platform-management-service": "1"
+        }
+      },
+      "action": "dynatrace.automations:run-javascript",
+      "active": true,
+      "position": {
+        "x": -1,
+        "y": 4
+      },
+      "conditions": {
+        "states": {
+          "execute_dql-summarized_execution_details_bytime": "OK"
+        }
+      },
+      "description": "Run custom JavaScript code.",
+      "predecessors": [
+        "execute_dql-summarized_execution_details_bytime"
+      ]
+    }
+  }
+}

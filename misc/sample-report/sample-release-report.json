@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "id": "20261111160000-aaaaaaaa",
+  "meta": {
+    "application": "Fusion",
+    "environment": "UAT",
+    "release": "2.5.0",
+    "baselineRelease": "2.4.0",
+    "generatedAt": "2026-11-11T16:00:00.000Z"
+  },
+  "current": {
+    "te_uuid": "cur-aaaaaaaa",
+    "test_execution": "Fusion-PaceBenchmark-cur",
+    "test_start": "2026-11-05T06:00:00Z",
+    "test_end": "2026-11-05T07:00:00Z",
+    "durationMs": 3600000
+  },
+  "baseline": {
+    "te_uuid": "bas-bbbbbbbb",
+    "test_execution": "Fusion-PaceBenchmark-bas",
+    "test_start": "2026-09-09T19:00:00Z",
+    "test_end": "2026-09-09T20:00:00Z",
+    "durationMs": 3600000
+  },
+  "config": {
+    "thresholds": {
+      "responseTime": {
+        "relEnabled": true,
+        "relPct": 20,
+        "staticEnabled": false,
+        "staticValue": 2000,
+        "combination": "or"
+      },
+      "errorRate": {
+        "relEnabled": true,
+        "relPct": 50,
+        "staticEnabled": false,
+        "staticValue": 5,
+        "combination": "and"
+      },
+      "errorCount": {
+        "relEnabled": true,
+        "relPct": 50,
+        "staticEnabled": false,
+        "staticValue": 100,
+        "combination": "or"
+      },
+      "requestCount": {
+        "relEnabled": true,
+        "relPct": 20,
+        "staticEnabled": false,
+        "staticValue": 10,
+        "combination": "or"
+      },
+      "cpu": {
+        "relEnabled": true,
+        "relPct": 50,
+        "staticEnabled": false,
+        "staticValue": 80,
+        "combination": "or"
+      },
+      "memory": {
+        "relEnabled": true,
+        "relPct": 50,
+        "staticEnabled": false,
+        "staticValue": 1024,
+        "combination": "or"
+      }
+    },
+    "gcWarnPct": 5,
+    "gcFailPct": 10,
+    "warnFraction": 0.5,
+    "durationMismatchPct": 20,
+    "perfMetric": "p95"
+  },
+  "overall": "FAIL",
+  "rules": [
+    {
+      "id": "performance",
+      "title": "Online performance vs previous release",
+      "verdict": "FAIL",
+      "summary": "1 business transactions failed and 0 raised warnings out of 2 evaluated."
+    },
+    {
+      "id": "cpu",
+      "title": "CPU request/limit and usage vs previous release",
+      "verdict": "FAIL",
+      "summary": "1 CPU checks failed and 0 raised warnings out of 3 evaluated."
+    },
+    {
+      "id": "memory",
+      "title": "Memory request/limit and usage vs previous release",
+      "verdict": "PASS",
+      "summary": "All 3 memory checks are within configured thresholds."
+    },
+    {
+      "id": "gc",
+      "title": "Java GC overhead below 10% (warning at 5%)",
+      "verdict": "WARNING",
+      "summary": "0 JVM processes failed and 1 raised warnings out of 1 evaluated."
+    },
+    {
+      "id": "errors",
+      "title": "Error rate within threshold",
+      "verdict": "PASS",
+      "summary": "All 1 error-rate checks are within configured thresholds."
+    },
+    {
+      "id": "throughput",
+      "title": "No throughput degradation vs previous release",
+      "verdict": "PASS",
+      "summary": "All 3 throughput measures are within configured thresholds."
+    }
+  ],
+  "warnings": [],
+  "performance": {
+    "metric": "p95",
+    "rows": [
+      {
+        "transaction": "<script>alert(1)</script>",
+        "baseline": 400,
+        "current": 700,
+        "deltaPct": 75,
+        "baselineCount": 1000,
+        "currentCount": 1000,
+        "status": "FAIL"
+      },
+      {
+        "transaction": "Login",
+        "baseline": 200,
+        "current": 205,
+        "deltaPct": 2.5,
+        "baselineCount": 1000,
+        "currentCount": 1000,
+        "status": "PASS"
+      }
+    ]
+  },
+  "throughput": {
+    "rows": [
+      {
+        "metric": "Transactions per second",
+        "unit": "tx/s",
+        "baseline": 0.5555555555555556,
+        "current": 0.5555555555555556,
+        "deltaPct": 0,
+        "status": "PASS"
+      },
+      {
+        "metric": "Service requests per second",
+        "unit": "req/s",
+        "baseline": 1000,
+        "current": 1000,
+        "deltaPct": 0,
+        "status": "PASS"
+      },
+      {
+        "metric": "Completed business transactions (successful)",
+        "unit": "count",
+        "baseline": 2000,
+        "current": 2000,
+        "deltaPct": 0,
+        "status": "PASS"
+      }
+    ]
+  },
+  "errors": {
+    "rows": [
+      {
+        "scope": "Overall",
+        "baselineRatePct": 0,
+        "currentRatePct": 0,
+        "baselineFailed": 0,
+        "currentFailed": 0,
+        "currentTotal": 2000,
+        "status": "PASS",
+        "informational": false
+      }
+    ]
+  },
+  "cpu": {
+    "rows": [
+      {
+        "entity": "=cmd|' /C calc'!A0",
+        "techType": "SPRINGBOOT",
+        "metric": "CPU usage",
+        "unit": "%",
+        "baseline": 40,
+        "current": 40,
+        "deltaPct": 0,
+        "status": "PASS"
+      },
+      {
+        "entity": "=cmd|' /C calc'!A0",
+        "techType": "SPRINGBOOT",
+        "metric": "CPU request",
+        "unit": "m",
+        "baseline": 500,
+        "current": 500,
+        "deltaPct": 0,
+        "status": "PASS"
+      },
+      {
+        "entity": "=cmd|' /C calc'!A0",
+        "techType": "SPRINGBOOT",
+        "metric": "CPU limit",
+        "unit": "m",
+        "baseline": 1000,
+        "current": 2000,
+        "deltaPct": 100,
+        "status": "FAIL"
+      }
+    ]
+  },
+  "memory": {
+    "rows": [
+      {
+        "entity": "=cmd|' /C calc'!A0",
+        "techType": "SPRINGBOOT",
+        "metric": "Memory usage",
+        "unit": "MiB",
+        "baseline": 500,
+        "current": 500,
+        "deltaPct": 0,
+        "status": "PASS"
+      },
+      {
+        "entity": "=cmd|' /C calc'!A0",
+        "techType": "SPRINGBOOT",
+        "metric": "Memory request",
+        "unit": "MiB",
+        "baseline": 512,
+        "current": 512,
+        "deltaPct": 0,
+        "status": "PASS"
+      },
+      {
+        "entity": "=cmd|' /C calc'!A0",
+        "techType": "SPRINGBOOT",
+        "metric": "Memory limit",
+        "unit": "MiB",
+        "baseline": 1024,
+        "current": 1024,
+        "deltaPct": 0,
+        "status": "PASS"
+      }
+    ]
+  },
+  "gc": {
+    "rows": [
+      {
+        "entity": "=cmd|' /C calc'!A0",
+        "baselinePct": 2,
+        "currentPct": 7,
+        "status": "WARNING"
+      }
+    ]
+  },
+  "auditStatement": "SRE Release Validation for Fusion / UAT, release 2.5.0, generated Wed, 11 Nov 2026 16:00:00 GMT.\nRelease evaluated: load test \"Fusion-PaceBenchmark-cur\" run at Thu, 05 Nov 2026 06:00:00 GMT. Baseline compared: \"Fusion-PaceBenchmark-bas\" run at Wed, 09 Sep 2026 19:00:00 GMT (release 2.4.0).\nMetrics analysed: business transaction response time, CPU and memory usage with Kubernetes request/limit changes, Java GC overhead, error rate and throughput.\nValidation results:\n  - Online performance vs previous release: FAIL. 1 business transactions failed and 0 raised warnings out of 2 evaluated.\n  - CPU request/limit and usage vs previous release: FAIL. 1 CPU checks failed and 0 raised warnings out of 3 evaluated.\n  - Memory request/limit and usage vs previous release: PASS. All 3 memory checks are within configured thresholds.\n  - Java GC overhead below 10% (warning at 5%): WARNING. 0 JVM processes failed and 1 raised warnings out of 1 evaluated.\n  - Error rate within threshold: PASS. All 1 error-rate checks are within configured thresholds.\n  - No throughput degradation vs previous release: PASS. All 3 throughput measures are within configured thresholds.\nOverall validation outcome: FAIL.\nThe release does NOT meet the SRE release requirements. APPROVAL IS NOT RECOMMENDED until the failed items are resolved or formally accepted.\nThresholds applied: response time +20%, CPU +50%, memory +50%, GC warning 5% / failure 10%. Evidence source: Dynatrace Grail (NeoLoad business events and platform metrics); report id 20261111160000-aaaaaaaa."
+}

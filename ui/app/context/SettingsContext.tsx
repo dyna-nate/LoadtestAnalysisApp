@@ -3,7 +3,24 @@ import { type ThresholdConfig, type MetricCategory, type MetricThreshold, DEFAUL
 
 const STORAGE_KEY = "dt-neoload:settings";
 
+export interface ReportSettings {
+  gcWarnPct: number;
+  gcFailPct: number;
+  warnFraction: number;
+  durationMismatchPct: number;
+  perfMetric: "avg" | "p50" | "p90" | "p95" | "p99";
+}
+
+export const DEFAULT_REPORT_SETTINGS: ReportSettings = {
+  gcWarnPct: 5,
+  gcFailPct: 10,
+  warnFraction: 0.5,
+  durationMismatchPct: 20,
+  perfMetric: "p95",
+};
+
 interface AppSettings {
+  report: ReportSettings;
   showMissingTestsNotice: boolean;
   benchmarkScenarioFilter: boolean;
   thresholds: ThresholdConfig;
@@ -36,6 +53,7 @@ function mergeTechThresholds(stored: unknown): Record<string, MetricThreshold> {
 
 function loadSettings(): AppSettings {
   const defaults: AppSettings = {
+    report: { ...DEFAULT_REPORT_SETTINGS },
     showMissingTestsNotice: true,
     benchmarkScenarioFilter: false,
     thresholds: { ...DEFAULT_THRESHOLDS },
@@ -48,6 +66,7 @@ function loadSettings(): AppSettings {
     return {
       ...defaults,
       ...parsed,
+      report:         { ...DEFAULT_REPORT_SETTINGS, ...(parsed.report ?? {}) },
       thresholds:     mergeThresholds(parsed.thresholds),
       techThresholds: mergeTechThresholds(parsed.techThresholds),
     };
@@ -67,7 +86,7 @@ interface SettingsContextValue {
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
-  settings: { showMissingTestsNotice: true, benchmarkScenarioFilter: false, thresholds: { ...DEFAULT_THRESHOLDS }, techThresholds: { ...DEFAULT_TECH_THRESHOLDS } },
+  settings: { report: { ...DEFAULT_REPORT_SETTINGS }, showMissingTestsNotice: true, benchmarkScenarioFilter: false, thresholds: { ...DEFAULT_THRESHOLDS }, techThresholds: { ...DEFAULT_TECH_THRESHOLDS } },
   updateSettings: () => {},
 });
 

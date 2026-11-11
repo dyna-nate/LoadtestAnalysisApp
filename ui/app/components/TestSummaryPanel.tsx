@@ -241,7 +241,7 @@ export const TestSummaryPanel = () => {
     if (!primaryTest) { setTestCountData(new Map()); return; }
     const allUuids = [primaryTest.te_uuid, ...compareTests.map(t => t.te_uuid)];
     const list = allUuids.map(id => `"${id}"`).join(', ');
-    const query = `fetch bizevents, from: -365d | filter event.type == "neoload.responsetime.detailed" | filter in(te_uuid, {${list}}) | summarize total_count = sum(toLong(count)), total_fails = sum(toLong(fail_count)), by: { te_uuid }`;
+    const query = `fetch bizevents, from: -365d | filter in(event.type, {"neoload.responsetime.detailed", "loadtest.responsetime.detailed"}) | filter in(te_uuid, {${list}}) | summarize total_count = sum(toLong(count)), total_fails = sum(toLong(fail_count)), by: { te_uuid }`;
     queryExecutionClient
       .queryExecute({ body: { query, requestTimeoutMilliseconds: 30000 } })
       .then(res => {

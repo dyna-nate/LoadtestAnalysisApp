@@ -174,7 +174,7 @@ function aggMetricForField(agg: AggMetrics, field: keyof RequestDetailRecord): n
 }
 
 function bizeventsQuery(teUuid: string): string {
-  return `fetch bizevents, from: -365d | filter event.type == "neoload.responsetime.detailed" | filter te_uuid == "${teUuid}"`;
+  return `fetch bizevents, from: -365d | filter in(event.type, {"neoload.responsetime.detailed", "loadtest.responsetime.detailed"}) | filter te_uuid == "${teUuid}"`;
 }
 
 // ── Service-metrics helpers (for the in-panel service detail section) ─────────
@@ -203,7 +203,7 @@ interface SvcTestData { label: string; testStart: string; recs: Record<string, u
 function servicesBizeventsForRowDql(teUuid: string, transactionName: string, scriptName: string, pageContext: string): string {
   return [
     `fetch bizevents, from: -365d`,
-    `| filter event.type == "neoload.services.detailed"`,
+    `| filter in(event.type, {"neoload.services.detailed", "loadtest.services.detailed"})`,
     `| filter te_uuid == "${teUuid}"`,
     `| filter transaction_name == "${transactionName}"`,
     `| filter script_name == "${scriptName}"`,

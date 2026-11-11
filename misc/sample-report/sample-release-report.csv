@@ -1,0 +1,21 @@
+section,item,metric,unit,baseline,current,delta_pct,status
+summary,overall,,,,,,FAIL
+rule,Online performance vs previous release,,,,,,FAIL
+rule,CPU request/limit and usage vs previous release,,,,,,FAIL
+rule,Memory request/limit and usage vs previous release,,,,,,PASS
+rule,Java GC overhead below 10% (warning at 5%),,,,,,WARNING
+rule,Error rate within threshold,,,,,,PASS
+rule,No throughput degradation vs previous release,,,,,,PASS
+performance,<script>alert(1)</script>,p95,ms,400,700,75.00,FAIL
+performance,Login,p95,ms,200,205,2.50,PASS
+throughput,Transactions per second,,tx/s,0.5555555555555556,0.5555555555555556,0.00,PASS
+throughput,Service requests per second,,req/s,1000,1000,0.00,PASS
+throughput,Completed business transactions (successful),,count,2000,2000,0.00,PASS
+errors,Overall,error_rate,%,0.000,0.000,,PASS
+cpu,'=cmd|' /C calc'!A0,CPU usage,%,40,40,0.00,PASS
+cpu,'=cmd|' /C calc'!A0,CPU request,m,500,500,0.00,PASS
+cpu,'=cmd|' /C calc'!A0,CPU limit,m,1000,2000,100.00,FAIL
+memory,'=cmd|' /C calc'!A0,Memory usage,MiB,500,500,0.00,PASS
+memory,'=cmd|' /C calc'!A0,Memory request,MiB,512,512,0.00,PASS
+memory,'=cmd|' /C calc'!A0,Memory limit,MiB,1024,1024,0.00,PASS
+gc,'=cmd|' /C calc'!A0,gc_overhead,%,2.000,7.000,,WARNING

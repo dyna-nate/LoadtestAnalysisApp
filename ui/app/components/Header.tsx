@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { AppHeader, Flex } from "@dynatrace/strato-components/layouts";
 import { Select } from "@dynatrace/strato-components/forms";
 import { Text } from "@dynatrace/strato-components/typography";
+import { Button } from "@dynatrace/strato-components/buttons";
+import { useHiddenTests } from "../context/HiddenTestsContext";
 import { SettingIcon } from "@dynatrace/strato-icons";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import {
@@ -17,8 +19,17 @@ import { logger } from "../utils/logger";
 const LOOKUP_QUERY =
   'load "/lookups/perftest/neoload/testsummarybytime" | sort test_start desc';
 
-function formatRunLabel(t: TestExecution): string {
-  return new Date(t.test_start).toLocaleString();
+function durationMs(t: TestExecution): number | null {
+  if (t.test_duration_ms != null && !isNaN(Number(t.test_duration_ms))) return Number(t.test_duration_ms);
+  const d = new Date(t.test_end).getTime() - new Date(t.test_start).getTime();
+  return isNaN(d) ? null : d;
+}
+
+function fmtDur(ms: number | null): string {
+  if (ms == null) return "n/a";
+  const s = Math.round(ms / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
 }
 
 export const Header = () => {
@@ -26,6 +37,10 @@ export const Header = () => {
   const { data, isLoading, error } = useDql<TestExecution>(LOOKUP_QUERY);
   const { primaryTest, setPrimaryTest, compareTests, setCompareTests } = useSelectedTest();
   const { settings } = useSettings();
+  const { isHidden, hiddenIds, hideTest, unhideTest } = useHiddenTests();
+  const [showHidden, setShowHidden] = useState(false);
+  const formatRunLabel = (t: TestExecution) =>
+    `${new Date(t.test_start).toLocaleString()} · ${fmtDur(durationMs(t))}${isHidden(t.te_uuid) ? " (hidden)" : ""}`;
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
 
@@ -51,6 +66,7 @@ export const Header = () => {
 
   const testRuns = allRecords.filter(
     (r) =>
+      (showHidden || !isHidden(r.te_uuid) || r.te_uuid === primaryTest?.te_uuid) &&
       getScenario(r) === selectedScenario &&
       (!selectedProject || getProject(r) === selectedProject)
   );
@@ -135,6 +151,12 @@ export const Header = () => {
           <AppHeader.NavigationItem as={Link} to="/data">
             Explore Data
           </AppHeader.NavigationItem>
+          <AppHeader.NavigationItem as={Link} to="/report">
+            Release Report
+          </AppHeader.NavigationItem>
+          <AppHeader.NavigationItem as={Link} to="/setup">
+            Integration Setup
+          </AppHeader.NavigationItem>
           <AppHeader.NavigationItem
             as="button"
             onClick={() => setSettingsOpen(true)}
@@ -148,7 +170,18 @@ export const Header = () => {
         <AppHeader.ActionItems>
           <Flex flexDirection="column" gap={4}>
             <Text textStyle="small" color="var(--dt-color-text-subdued, #8e9099)">
-              Select a project and scenario, then choose a primary test to analyze and optionally compare against past tests.
+              {primaryTest
+                ? (() => {
+                    const p = durationMs(primaryTest);
+                    const diffs = compareTests.filter((t) => {
+                      const d = durationMs(t);
+                      return p != null && d != null && p > 0 && Math.abs(d - p) / p > 0.1;
+                    });
+                    return `Primary duration: ${fmtDur(p)}` +
+                      (compareTests.length ? ` | Compare: ${compareTests.map((t) => fmtDur(durationMs(t))).join(", ")}` : "") +
+                      (diffs.length ? ` ⚠ ${diffs.length} compare test(s) differ by more than 10% in duration` : "");
+                  })()
+                : "Select a project and scenario, then choose a primary test to analyze and optionally compare against past tests."}
             </Text>
             <Flex gap={8} alignItems="center">
               <div style={{ width: "280px" }}>
@@ -199,6 +232,22 @@ export const Header = () => {
                   </Select.Content>
                 </Select>
               </div>
+              {primaryTest && (
+                <Button
+                  onClick={() =>
+                    isHidden(primaryTest.te_uuid)
+                      ? unhideTest(primaryTest.te_uuid)
+                      : (hideTest(primaryTest.te_uuid), setPrimaryTest(null), setCompareTests([]))
+                  }
+                >
+                  {isHidden(primaryTest.te_uuid) ? "Unhide test" : "Hide test"}
+                </Button>
+              )}
+              {hiddenIds.size > 0 && (
+                <Button onClick={() => setShowHidden(!showHidden)}>
+                  {showHidden ? "Hide hidden" : `Show hidden (${hiddenIds.size})`}
+                </Button>
+              )}
               <div style={{ width: "380px" }}>
                 <Select<string, true>
                   multiple={true}

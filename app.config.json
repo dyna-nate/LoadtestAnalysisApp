@@ -2,14 +2,15 @@
   "$schema": "./.dt-app/app.config.schema.json",
   "environmentUrl": "https://xkt51160.apps.dynatrace.com/",
   "app": {
-    "name": "dt-neoload-analysis-app",
+    "name": "Load Test Analysis",
     "version": "0.0.5",
-    "description": "A starting project with routing, fetching data, and charting",
+    "description": "Vendor-agnostic load test analysis and comparison for Dynatrace",
     "id": "my.dt.neoload.analysis.app",
     "scopes": [
       { "name": "storage:logs:read", "comment": "Read log data" },
       { "name": "storage:files:read", "comment": "Read file data" },
       { "name": "storage:buckets:read", "comment": "Read lookup tables" },
+      { "name": "storage:spans:read", "comment": "Read span data for integration detection" },
       { "name": "storage:events:read", "comment": "Read events" },
       { "name": "storage:bizevents:read", "comment": "Read business events" },
       { "name": "storage:metrics:read", "comment": "Read metrics" },

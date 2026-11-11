@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>SRE Release Validation Report — 2.5.0</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:#111827; max-width: 1000px; margin: 24px auto; padding: 0 16px; font-size: 13px; line-height: 1.45; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+  .muted { color:#6b7280; } .badge { color:#fff; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; white-space:nowrap; }
+  .overall { display:inline-block; font-size:20px; padding:6px 18px; border-radius:6px; color:#fff; font-weight:700; }
+  table { border-collapse: collapse; width:100%; margin: 6px 0 12px; } th, td { border:1px solid #e5e7eb; padding:4px 8px; text-align:left; vertical-align: top; }
+  th { background:#f3f4f6; font-weight:600; } .meta td:first-child { width: 190px; font-weight:600; background:#f9fafb; }
+  pre.audit { white-space: pre-wrap; background:#f9fafb; border:1px solid #e5e7eb; padding:12px; border-radius:4px; font-family: inherit; }
+  .warn { background:#fff7ed; border:1px solid #fdba74; padding:8px 12px; border-radius:4px; margin:6px 0; }
+  figure { margin: 8px 0; page-break-inside: avoid; } tr { page-break-inside: avoid; }
+  @media print { body { margin: 0; max-width: none; } h2 { page-break-after: avoid; } .badge, .overall { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<h1>SRE Release Validation Report</h1>
+<p class="muted">Evidence for Change Request attachment · Report ID 20261111160000-aaaaaaaa</p>
+
+<h2>Executive summary</h2>
+<p><span class="overall" style="background:#c62828">FAIL</span></p>
+<table class="meta"><tbody>
+<tr><td>Application</td><td>Fusion</td></tr>
+<tr><td>Environment</td><td>UAT</td></tr>
+<tr><td>Current release</td><td>2.5.0 — Fusion-PaceBenchmark-cur (Thu, 05 Nov 2026 06:00:00 GMT, 1h 0m)</td></tr>
+<tr><td>Baseline release</td><td>2.4.0 — Fusion-PaceBenchmark-bas (Wed, 09 Sep 2026 19:00:00 GMT, 1h 0m)</td></tr>
+<tr><td>Generated</td><td>Wed, 11 Nov 2026 16:00:00 GMT</td></tr>
+</tbody></table>
+
+<table><thead><tr><th>SRE criterion</th><th>Result</th><th>Summary</th></tr></thead><tbody><tr><td>Online performance vs previous release</td><td><span class="badge" style="background:#c62828">FAIL</span></td><td>1 business transactions failed and 0 raised warnings out of 2 evaluated.</td></tr><tr><td>CPU request/limit and usage vs previous release</td><td><span class="badge" style="background:#c62828">FAIL</span></td><td>1 CPU checks failed and 0 raised warnings out of 3 evaluated.</td></tr><tr><td>Memory request/limit and usage vs previous release</td><td><span class="badge" style="background:#1a7f37">PASS</span></td><td>All 3 memory checks are within configured thresholds.</td></tr><tr><td>Java GC overhead below 10% (warning at 5%)</td><td><span class="badge" style="background:#b35900">WARNING</span></td><td>0 JVM processes failed and 1 raised warnings out of 1 evaluated.</td></tr><tr><td>Error rate within threshold</td><td><span class="badge" style="background:#1a7f37">PASS</span></td><td>All 1 error-rate checks are within configured thresholds.</td></tr><tr><td>No throughput degradation vs previous release</td><td><span class="badge" style="background:#1a7f37">PASS</span></td><td>All 3 throughput measures are within configured thresholds.</td></tr></tbody></table>
+
+<h2>Performance comparison (P95, ms)</h2>
+<figure><svg viewBox="0 0 710 96" width="100%" role="img" aria-label="Response time P95"><text x="0" y="14" font-size="12" font-weight="600" fill="#111827">Response time P95 (ms)</text><rect x="490" y="4" width="10" height="10" fill="#9ca3af"/><text x="504" y="13" font-size="10">Baseline</text><rect x="560" y="4" width="10" height="10" fill="#2563eb"/><text x="574" y="13" font-size="10">Current</text><text x="214" y="42" font-size="10" text-anchor="end" fill="#111827">&lt;script&gt;alert(1)&lt;/script&gt;</text><rect x="220" y="30" width="240" height="10" fill="#9ca3af"/><text x="464" y="39" font-size="9" fill="#374151">400</text><rect x="220" y="42" width="420" height="10" fill="#2563eb"/><text x="644" y="51" font-size="9" fill="#374151">700</text><text x="214" y="72" font-size="10" text-anchor="end" fill="#111827">Login</text><rect x="220" y="60" width="120" height="10" fill="#9ca3af"/><text x="344" y="69" font-size="9" fill="#374151">200</text><rect x="220" y="72" width="123" height="10" fill="#2563eb"/><text x="347" y="81" font-size="9" fill="#374151">205</text></svg></figure>
+<table><thead><tr><th>Transaction</th><th>Baseline</th><th>Current</th><th>Δ %</th><th>Status</th></tr></thead><tbody><tr><td>&lt;script&gt;alert(1)&lt;/script&gt;</td><td>400</td><td>700</td><td>+75.0%</td><td><span class="badge" style="background:#c62828">FAIL</span></td></tr><tr><td>Login</td><td>200</td><td>205</td><td>+2.5%</td><td><span class="badge" style="background:#1a7f37">PASS</span></td></tr></tbody></table>
+
+<h2>Throughput analysis</h2>
+<figure><svg viewBox="0 0 710 126" width="100%" role="img" aria-label="Throughput"><text x="0" y="14" font-size="12" font-weight="600" fill="#111827">Throughput (per metric)</text><rect x="490" y="4" width="10" height="10" fill="#9ca3af"/><text x="504" y="13" font-size="10">Baseline</text><rect x="560" y="4" width="10" height="10" fill="#2563eb"/><text x="574" y="13" font-size="10">Current</text><text x="214" y="42" font-size="10" text-anchor="end" fill="#111827">Transactions per second (tx/s)</text><rect x="220" y="30" width="1" height="10" fill="#9ca3af"/><text x="225" y="39" font-size="9" fill="#374151">0.56</text><rect x="220" y="42" width="1" height="10" fill="#2563eb"/><text x="225" y="51" font-size="9" fill="#374151">0.56</text><text x="214" y="72" font-size="10" text-anchor="end" fill="#111827">Service requests per second (req/…</text><rect x="220" y="60" width="210" height="10" fill="#9ca3af"/><text x="434" y="69" font-size="9" fill="#374151">1,000</text><rect x="220" y="72" width="210" height="10" fill="#2563eb"/><text x="434" y="81" font-size="9" fill="#374151">1,000</text><text x="214" y="102" font-size="10" text-anchor="end" fill="#111827">Completed business transactions (…</text><rect x="220" y="90" width="420" height="10" fill="#9ca3af"/><text x="644" y="99" font-size="9" fill="#374151">2,000</text><rect x="220" y="102" width="420" height="10" fill="#2563eb"/><text x="644" y="111" font-size="9" fill="#374151">2,000</text></svg></figure>
+<table><thead><tr><th>Metric</th><th>Baseline</th><th>Current</th><th>Δ %</th><th>Status</th></tr></thead><tbody><tr><td>Transactions per second</td><td>0.56 tx/s</td><td>0.56 tx/s</td><td>0.0%</td><td><span class="badge" style="background:#1a7f37">PASS</span></td></tr><tr><td>Service requests per second</td><td>1,000 req/s</td><td>1,000 req/s</td><td>0.0%</td><td><span class="badge" style="background:#1a7f37">PASS</span></td></tr><tr><td>Completed business transactions (successful)</td><td>2,000 count</td><td>2,000 count</td><td>0.0%</td><td><span class="badge" style="background:#1a7f37">PASS</span></td></tr></tbody></table>
+
+<h2>Error rate analysis</h2>
+<figure><svg viewBox="0 0 710 66" width="100%" role="img" aria-label="Error rate"><text x="0" y="14" font-size="12" font-weight="600" fill="#111827">Error rate (%)</text><rect x="490" y="4" width="10" height="10" fill="#9ca3af"/><text x="504" y="13" font-size="10">Baseline</text><rect x="560" y="4" width="10" height="10" fill="#2563eb"/><text x="574" y="13" font-size="10">Current</text><text x="214" y="42" font-size="10" text-anchor="end" fill="#111827">Overall</text><rect x="220" y="30" width="1" height="10" fill="#9ca3af"/><text x="225" y="39" font-size="9" fill="#374151">0</text><rect x="220" y="42" width="1" height="10" fill="#2563eb"/><text x="225" y="51" font-size="9" fill="#374151">0</text></svg></figure>
+<table><thead><tr><th>Scope</th><th>Baseline error rate</th><th>Current error rate</th><th>Failed (current / total)</th><th>Status</th></tr></thead><tbody><tr><td>Overall</td><td>0.00%</td><td>0.00%</td><td>0 / 2000</td><td><span class="badge" style="background:#1a7f37">PASS</span></td></tr></tbody></table>
+
+<h2>CPU</h2>
+<figure><svg viewBox="0 0 710 66" width="100%" role="img" aria-label="CPU usage"><text x="0" y="14" font-size="12" font-weight="600" fill="#111827">CPU usage (%)</text><rect x="490" y="4" width="10" height="10" fill="#9ca3af"/><text x="504" y="13" font-size="10">Baseline</text><rect x="560" y="4" width="10" height="10" fill="#2563eb"/><text x="574" y="13" font-size="10">Current</text><text x="214" y="42" font-size="10" text-anchor="end" fill="#111827">=cmd|&#39; /C calc&#39;!A0</text><rect x="220" y="30" width="420" height="10" fill="#9ca3af"/><text x="644" y="39" font-size="9" fill="#374151">40</text><rect x="220" y="42" width="420" height="10" fill="#2563eb"/><text x="644" y="51" font-size="9" fill="#374151">40</text></svg></figure>
+<table><thead><tr><th>Service / process</th><th>Metric</th><th>Baseline</th><th>Current</th><th>Δ %</th><th>Status</th></tr></thead><tbody><tr><td>=cmd|&#39; /C calc&#39;!A0</td><td>CPU usage</td><td>40 %</td><td>40 %</td><td>0.0%</td><td><span class="badge" style="background:#1a7f37">PASS</span></td></tr><tr><td>=cmd|&#39; /C calc&#39;!A0</td><td>CPU request</td><td>500 m</td><td>500 m</td><td>0.0%</td><td><span class="badge" style="background:#1a7f37">PASS</span></td></tr><tr><td>=cmd|&#39; /C calc&#39;!A0</td><td>CPU limit</td><td>1,000 m</td><td>2,000 m</td><td>+100.0%</td><td><span class="badge" style="background:#c62828">FAIL</span></td></tr></tbody></table>
+
+<h2>Memory</h2>
+<figure><svg viewBox="0 0 710 66" width="100%" role="img" aria-label="Memory usage"><text x="0" y="14" font-size="12" font-weight="600" fill="#111827">Memory usage (MiB)</text><rect x="490" y="4" width="10" height="10" fill="#9ca3af"/><text x="504" y="13" font-size="10">Baseline</text><rect x="560" y="4" width="10" height="10" fill="#2563eb"/><text x="574" y="13" font-size="10">Current</text><text x="214" y="42" font-size="10" text-anchor="end" fill="#111827">=cmd|&#39; /C calc&#39;!A0</text><rect x="220" y="30" width="420" height="10" fill="#9ca3af"/><text x="644" y="39" font-size="9" fill="#374151">500</text><rect x="220" y="42" width="420" height="10" fill="#2563eb"/><text x="644" y="51" font-size="9" fill="#374151">500</text></svg></figure>
+<table><thead><tr><th>Service / process</th><th>Metric</th><th>Baseline</th><th>Current</th><th>Δ %</th><th>Status</th></tr></thead><tbody><tr><td>=cmd|&#39; /C calc&#39;!A0</td><td>Memory usage</td><td>500 MiB</td><td>500 MiB</td><td>0.0%</td><td><span class="badge" style="background:#1a7f37">PASS</span></td></tr><tr><td>=cmd|&#39; /C calc&#39;!A0</td><td>Memory request</td><td>512 MiB</td><td>512 MiB</td><td>0.0%</td><td><span class="badge" style="background:#1a7f37">PASS</span></td></tr><tr><td>=cmd|&#39; /C calc&#39;!A0</td><td>Memory limit</td><td>1,024 MiB</td><td>1,024 MiB</td><td>0.0%</td><td><span class="badge" style="background:#1a7f37">PASS</span></td></tr></tbody></table>
+
+<h2>Java GC overhead</h2>
+<figure><svg viewBox="0 0 710 66" width="100%" role="img" aria-label="GC overhead"><text x="0" y="14" font-size="12" font-weight="600" fill="#111827">GC overhead (%)</text><rect x="490" y="4" width="10" height="10" fill="#9ca3af"/><text x="504" y="13" font-size="10">Baseline</text><rect x="560" y="4" width="10" height="10" fill="#2563eb"/><text x="574" y="13" font-size="10">Current</text><text x="214" y="42" font-size="10" text-anchor="end" fill="#111827">=cmd|&#39; /C calc&#39;!A0</text><rect x="220" y="30" width="120" height="10" fill="#9ca3af"/><text x="344" y="39" font-size="9" fill="#374151">2</text><rect x="220" y="42" width="420" height="10" fill="#2563eb"/><text x="644" y="51" font-size="9" fill="#374151">7</text></svg></figure><table><thead><tr><th>JVM process</th><th>Baseline GC %</th><th>Current GC %</th><th>Status</th></tr></thead><tbody><tr><td>=cmd|&#39; /C calc&#39;!A0</td><td>2.00%</td><td>7.00%</td><td><span class="badge" style="background:#b35900">WARNING</span></td></tr></tbody></table>
+
+<h2>Audit evidence statement</h2>
+<pre class="audit">SRE Release Validation for Fusion / UAT, release 2.5.0, generated Wed, 11 Nov 2026 16:00:00 GMT.
+Release evaluated: load test &quot;Fusion-PaceBenchmark-cur&quot; run at Thu, 05 Nov 2026 06:00:00 GMT. Baseline compared: &quot;Fusion-PaceBenchmark-bas&quot; run at Wed, 09 Sep 2026 19:00:00 GMT (release 2.4.0).
+Metrics analysed: business transaction response time, CPU and memory usage with Kubernetes request/limit changes, Java GC overhead, error rate and throughput.
+Validation results:
+  - Online performance vs previous release: FAIL. 1 business transactions failed and 0 raised warnings out of 2 evaluated.
+  - CPU request/limit and usage vs previous release: FAIL. 1 CPU checks failed and 0 raised warnings out of 3 evaluated.
+  - Memory request/limit and usage vs previous release: PASS. All 3 memory checks are within configured thresholds.
+  - Java GC overhead below 10% (warning at 5%): WARNING. 0 JVM processes failed and 1 raised warnings out of 1 evaluated.
+  - Error rate within threshold: PASS. All 1 error-rate checks are within configured thresholds.
+  - No throughput degradation vs previous release: PASS. All 3 throughput measures are within configured thresholds.
+Overall validation outcome: FAIL.
+The release does NOT meet the SRE release requirements. APPROVAL IS NOT RECOMMENDED until the failed items are resolved or formally accepted.
+Thresholds applied: response time +20%, CPU +50%, memory +50%, GC warning 5% / failure 10%. Evidence source: Dynatrace Grail (NeoLoad business events and platform metrics); report id 20261111160000-aaaaaaaa.</pre>
+
+<h2>Thresholds applied</h2>
+<table><thead><tr><th>Setting</th><th>Value</th></tr></thead><tbody><tr><td>Response time (relative)</td><td>20%</td></tr><tr><td>Error rate (relative)</td><td>50%</td></tr><tr><td>Throughput drop (relative)</td><td>20%</td></tr><tr><td>CPU (relative)</td><td>50%</td></tr><tr><td>Memory (relative)</td><td>50%</td></tr><tr><td>GC overhead warning / failure</td><td>5% / 10%</td></tr><tr><td>Warning level</td><td>50% of a relative threshold</td></tr></tbody></table>
+<p class="muted">Print this page to PDF from your browser (Ctrl/Cmd+P → Save as PDF) to attach it to a Change Request.</p>
+</body></html>
