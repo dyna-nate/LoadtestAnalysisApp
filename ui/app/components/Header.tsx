@@ -16,8 +16,15 @@ import { useSettings } from "../context/SettingsContext";
 import { parseProjectFromTestExecution, parseScenarioFromTestExecution } from "../utils/sloData";
 import { logger } from "../utils/logger";
 
-const LOOKUP_QUERY =
-  'load "/lookups/perftest/neoload/testsummarybytime" | sort test_start desc';
+// One loadtest.summary bizevent is written per FINISHED test (the workflow writes it last), so tests
+// still running or only partly processed never appear here. Latest event wins if a test was re-ingested.
+const LOOKUP_QUERY = `fetch bizevents, from: -365d
+| filter event.type == "loadtest.summary"
+| sort timestamp desc
+| dedup te_uuid
+| fields test_execution, test_start, test_end, test_duration_ms, te_uuid, te_projectname, te_scenarioname,
+         source_id, count, avg_dur_ms, min_dur_ms, max_dur_ms, p50_dur_ms, p90_dur_ms, p95_dur_ms, p99_dur_ms
+| sort test_start desc`;
 
 function durationMs(t: TestExecution): number | null {
   if (t.test_duration_ms != null && !isNaN(Number(t.test_duration_ms))) return Number(t.test_duration_ms);
@@ -34,7 +41,8 @@ function fmtDur(ms: number | null): string {
 
 export const Header = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const { data, isLoading, error } = useDql<TestExecution>(LOOKUP_QUERY);
+  // useDql caps results at 1000 records by default; the summary list grows with every test run, so raise the cap.
+  const { data, isLoading, error } = useDql<TestExecution>({ query: LOOKUP_QUERY, maxResultRecords: 20000 });
   const { primaryTest, setPrimaryTest, compareTests, setCompareTests } = useSelectedTest();
   const { settings } = useSettings();
   const { isHidden, hiddenIds, hideTest, unhideTest } = useHiddenTests();
@@ -78,7 +86,7 @@ export const Header = () => {
   const compareIds = compareTests.map((t) => t.te_uuid);
 
   useEffect(() => {
-    if (isLoading) logger.debug("Loading test executions from lookup table...");
+    if (isLoading) logger.debug("Loading test executions from loadtest.summary bizevents...");
   }, [isLoading]);
 
   useEffect(() => {

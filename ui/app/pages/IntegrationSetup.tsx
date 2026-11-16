@@ -290,12 +290,12 @@ const TOOLS: ToolDef[] = [
               environment via <Strong>Automations &gt; Workflows &gt; Import</Strong>.
             </Text>
             <Text style={{ marginTop: "8px" }}>
-              The workflow runs every 45 minutes, queries spans from the last hour, and ingests:
+              The workflow runs every 3 hours, finds tests whose last span is more than 10 minutes old (finished tests only) that are not yet recorded, queries each test over its own exact time window, and ingests:
             </Text>
             <ul style={{ paddingLeft: "20px", marginTop: "8px", color: "#c8ccd4" }}>
               <li>Per-step performance metrics (count, avg, p25–p99) as <code>loadtest.responsetime.detailed</code> business events</li>
               <li>Service associations as <code>loadtest.services.detailed</code> business events</li>
-              <li>Test run summary into the lookup table for test discovery</li>
+              <li>Test run summary (one <code>loadtest.summary</code> business event per finished test) for test discovery</li>
             </ul>
           </>
         ),
