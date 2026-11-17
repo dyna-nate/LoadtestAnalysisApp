@@ -173,8 +173,11 @@ function aggMetricForField(agg: AggMetrics, field: keyof RequestDetailRecord): n
   }
 }
 
+// Legacy neoload.* events store the step name in na_keptn instead of transaction_name.
+const LEGACY_STEP = '| fieldsAdd transaction_name = coalesce(transaction_name, na_keptn)';
+
 function bizeventsQuery(teUuid: string): string {
-  return `fetch bizevents, from: -365d | filter in(event.type, {"neoload.responsetime.detailed", "loadtest.responsetime.detailed"}) | filter te_uuid == "${teUuid}"`;
+  return `fetch bizevents, from: -365d | filter in(event.type, {"neoload.responsetime.detailed", "loadtest.responsetime.detailed"}) | filter te_uuid == "${teUuid}" ${LEGACY_STEP}`;
 }
 
 // ── Service-metrics helpers (for the in-panel service detail section) ─────────
@@ -205,6 +208,7 @@ function servicesBizeventsForRowDql(teUuid: string, transactionName: string, scr
     `fetch bizevents, from: -365d`,
     `| filter in(event.type, {"neoload.services.detailed", "loadtest.services.detailed"})`,
     `| filter te_uuid == "${teUuid}"`,
+    LEGACY_STEP,
     `| filter transaction_name == "${transactionName}"`,
     `| filter script_name == "${scriptName}"`,
     `| filter page_context == "${pageContext}"`,

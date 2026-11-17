@@ -20,8 +20,8 @@ export interface SloConfig {
 // "Actions.GroupName.StepName." — strip the prefix and trailing dot so SLO
 // step names can be stored without the wrapper (e.g. "01_GetAccessToken").
 
-export function normalizeNaKeptn(na_keptn: string): string {
-  let s = na_keptn;
+export function normalizeNaKeptn(na_keptn: string | null | undefined): string {
+  let s = na_keptn ?? "";
   if (s.startsWith("Actions.")) s = s.slice("Actions.".length);
   if (s.endsWith(".")) s = s.slice(0, -1);
   return s;

@@ -62,7 +62,7 @@ export async function loadTransactions(teUuid: string): Promise<TxnAgg[]> {
   const weighted = pcts.map((p) => `${p}_w = sum(toDouble(${p}_dur_ms) * w)`).join(", ");
   const query = [
     `fetch bizevents, from: -365d`,
-    `| filter in(event.type, {${RT_TYPES}}) | filter te_uuid == "${teUuid}"`,
+    `| filter in(event.type, {${RT_TYPES}}) | filter te_uuid == "${teUuid}" | fieldsAdd transaction_name = coalesce(transaction_name, na_keptn)`,
     `| fieldsAdd w = toDouble(count)`,
     `| summarize cnt = sum(w), fails = sum(toDouble(fail_count)), ${weighted}, by: { transaction_name }`,
   ].join(" ");

@@ -223,7 +223,7 @@ function techMetricDetailDql(def: TechMetricDef, entity: GroupedEntity, from: st
 }
 
 function servicesBizeventsQuery(teUuid: string): string {
-  return `fetch bizevents, from: -365d | filter in(event.type, {"neoload.services.detailed", "loadtest.services.detailed"}) | filter te_uuid == "${teUuid}"`;
+  return `fetch bizevents, from: -365d | filter in(event.type, {"neoload.services.detailed", "loadtest.services.detailed"}) | filter te_uuid == "${teUuid}" | fieldsAdd transaction_name = coalesce(transaction_name, na_keptn)`;
 }
 
 // ── Delta cell ────────────────────────────────────────────────────────────────
