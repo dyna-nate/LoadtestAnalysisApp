@@ -1,5 +1,6 @@
 // ONE-OFF Workflow JS action (run manually, then delete): copy rows from the legacy lookup
 // /lookups/perftest/neoload/testsummarybytime into loadtest.summary bizevents so the app keeps its history.
+// event.provider must be exactly 'loadtest-workflow' so the OpenPipeline rule routes events to load_test_bizevents.
 // Caveats: lookup rows written by the old workflow may have truncated test_end/duration/counts
 // (they were captured mid-test). They are tagged backfilled=true so they can be recognised.
 import { queryExecutionClient } from '@dynatrace-sdk/client-query';
@@ -16,7 +17,9 @@ export default async function () {
 
   const ex = await queryExecutionClient.queryExecute({
     body: {
-      query: 'fetch bizevents, from: -365d | filter event.type == "loadtest.summary" | fields te_uuid | dedup te_uuid',
+      // Only count summaries already in the routed bucket: an earlier run landed in default_bizevents
+      // (35-day retention) because its event.provider did not match the OpenPipeline routing rule.
+      query: 'fetch bizevents, from: -365d | filter event.type == "loadtest.summary" | filter dt.system.bucket == "load_test_bizevents" | fields te_uuid | dedup te_uuid',
       requestTimeoutMilliseconds: 60000, maxResultRecords: 100000,
     },
   });
@@ -26,7 +29,7 @@ export default async function () {
 
   const now = Date.now();
   const events = todo.map((r) => {
-    const ev = { specversion: '1.0', id: r.te_uuid, source: 'loadtest-workflow-backfill', type: 'loadtest.summary', ...r, backfilled: true };
+    const ev = { specversion: '1.0', id: r.te_uuid, source: 'loadtest-workflow', type: 'loadtest.summary', ...r, backfilled: true };
     const endMs = new Date(String(r.test_end).replace(/(\.\d{3})\d+Z$/, '$1Z')).getTime();
     if (!isNaN(endMs) && now - endMs < MAX_TIME_AGE_MS) ev.time = new Date(endMs).toISOString();
     return ev;
